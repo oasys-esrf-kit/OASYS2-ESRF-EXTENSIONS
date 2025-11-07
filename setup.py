@@ -28,21 +28,21 @@
 #
 # Memorandum: 
 #
-# Install from sources: 
+#
+# Install from pypi:
+#     pip install OASYS2-ESRF-EXTENSIONS
+#
+# Install from sources (devel):
 #     git clone https://github.com/oasys-kit-esrf/OASYS2-ESRF-EXTENSIONS
 #     cd OASYS2-ESRF-EXTENSIONS
 #     python -m pip install -e . --no-deps --no-binary :all:
 #
 # Upload to pypi (when uploading, increment the version number):
 #     python setup.py register (only once, not longer needed)
-#     # use python > 3.10, pip > 25.2 (packages needed: twine build)
+#     # use python > 3.10, pip > 25.2 (packages needed: twine)
 #     rm -fR dist
 #     python setup.py sdist
-#     python -m build
 #     python -m twine upload dist/*
-#
-# Install from pypi:
-#     pip install OASYS2-ESRF-EXTENSIONS
 #
 
 __authors__ = ["M Sanchez del Rio, Juan Reyes-Herrera, Rafael Celestre"]
@@ -82,17 +82,16 @@ CLASSIFIERS = [
     'Intended Audience :: Science/Research',
     ]
 
-
 SETUP_REQUIRES = (
                   'setuptools',
                   )
 
 INSTALL_REQUIRES = (
                     'oasys2>=0.0.19',
-                    # 'pandas',
-                    # 'numba',
-                    # 'accelerator-toolbox==0.6.1',
-                    # 'oasys-barc4ro>=2024.11.13',
+                    'pandas',
+                    'numba',
+                    'accelerator-toolbox==0.6.1',
+                    'oasys-barc4ro>=2024.11.13',
                     # 'crystalpy>=0.0.25',  # todo: remove?, base lib of oasys2
                     # 'shadow4>=0.1.70',
                     # 'xoppylib>=1.0.46',
@@ -112,15 +111,8 @@ PACKAGE_DATA = {
 ENTRY_POINTS = {
     'oasys2.addons' : (
                         "ESRF = orangecontrib.esrf",
-                        # "Oasys ESRF Extension = orangecontrib.esrf.oasys",
-                        # "Syned ESRF Extension = orangecontrib.esrf.syned",
-                        # "XOPPY ESRF Extension = orangecontrib.esrf.xoppy",
-                        # "Shadow ESRF Extension = orangecontrib.esrf.shadow4",
-                        # "Wofry ESRF Extension = orangecontrib.esrf.wofry",
-                        # "SRW ESRF Extension = orangecontrib.esrf.srw",
                        ),
     'oasys2.widgets' : (
-                        # "ESRF wofry = orangecontrib.esrf.wofry.widgets.extension",
                         "ESRF Oasys   = orangecontrib.esrf.oasys.widgets.extension",
                         "ESRF Syned   = orangecontrib.esrf.syned.widgets.extension",
                         "ESRF XOPPY   = orangecontrib.esrf.xoppy.widgets.extension",
@@ -128,7 +120,6 @@ ENTRY_POINTS = {
                         "ESRF Wofry   = orangecontrib.esrf.wofry.widgets.extension",
                         "ESRF SRW     = orangecontrib.esrf.srw.widgets.extension",
                         ),
-    # 'oasys2.menus' : ("esrfmenu = orangecontrib.esrf.menu",)
     }
 
 if __name__ == '__main__':
