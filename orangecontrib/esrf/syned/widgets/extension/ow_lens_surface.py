@@ -26,6 +26,7 @@ from oasys2.widget.util.widget_util import write_surface_file
 from wofryimpl.beamline.optical_elements.refractors.lens import WOLens
 from wofry.propagator.wavefront2D.generic_wavefront import GenericWavefront2D
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class OWLensSurface(OWWidget):
     name = "Lens surface creator"
@@ -290,6 +291,7 @@ class OWLensSurface(OWWidget):
 
         canvas_widget_id.layout().addWidget(tmp)
 
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

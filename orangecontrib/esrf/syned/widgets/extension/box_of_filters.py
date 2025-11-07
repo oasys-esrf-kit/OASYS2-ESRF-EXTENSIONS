@@ -19,6 +19,7 @@ from orangecontrib.esrf.syned.util.syned_filter_packs import FilterBox, FilterBl
 
 from syned.util.json_tools import load_from_json_file, load_from_json_url
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class OWBoxOfFilters(OWOpticalElement):
 
@@ -249,6 +250,7 @@ class OWBoxOfFilters(OWOpticalElement):
         self.syned_filterbox.set_selection([self.att1, self.att2, self.att3, self.att4, self.att5])
         return self.syned_filterbox
 
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     from AnyQt.QtWidgets import QApplication

@@ -27,6 +27,7 @@ from srxraylib.metrology.profiles_simulation import slopes
 import oasys2.widget.util.widget_util as OU
 from oasys2.widget.util.widget_objects import OasysSurfaceData
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class OWdabam2d(OWWidget):
     name = "DABAM2D File Access and Processing"
@@ -390,6 +391,7 @@ class OWdabam2d(OWWidget):
             Zcoeffs, fit, residues = b4RO.fit_zernike_circ(data_i[2], nmodes=37, startmode=1, rec_zern=False)
             print('Zernike coefficients (um): \n' + str(Zcoeffs * 1e6))
 
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     a = QApplication(sys.argv)

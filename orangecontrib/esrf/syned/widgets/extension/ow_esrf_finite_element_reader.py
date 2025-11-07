@@ -38,6 +38,7 @@ from silx.gui.plot import Plot2D
 
 from srxraylib.metrology.profiles_simulation import slopes
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class FiniteElementReader(OWWidget):
 
@@ -547,6 +548,7 @@ class FiniteElementReader(OWWidget):
 
         tabs_canvas_index.layout().addWidget(tmp)
 
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     a = QApplication(sys.argv)

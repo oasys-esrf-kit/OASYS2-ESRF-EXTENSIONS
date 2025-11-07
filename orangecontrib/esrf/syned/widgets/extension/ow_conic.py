@@ -42,6 +42,7 @@ from orangecontrib.esrf.shadow4.util.conic_penelope import (
     hyperboloid as p_hyperboloid
 )
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class OWConic(OWWidget):
     name = "Conic surface"
@@ -409,6 +410,8 @@ class OWConic(OWWidget):
         tmp.setGraphTitle(title)
 
         canvas_widget_id.layout().addWidget(tmp)
+
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

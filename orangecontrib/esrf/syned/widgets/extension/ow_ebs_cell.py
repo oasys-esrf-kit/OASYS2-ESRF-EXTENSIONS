@@ -25,6 +25,8 @@ import at  # accelerator toolbox
 
 from oasys2.widget.util.widget_util import EmittingStream
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
+
 VERTICAL = 1
 HORIZONTAL = 2
 BOTH = 3
@@ -330,6 +332,8 @@ class OWEBSCELL(OWWidget):
                 self.resetSettings()
             except Exception:
                 pass
+
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     a = QApplication(sys.argv)

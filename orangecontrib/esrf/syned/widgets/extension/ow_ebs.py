@@ -29,6 +29,8 @@ import at  # accelerator toolbox
 
 from orangecontrib.wofry.widgets.gui.python_script import PythonScript  # NOTE: existing dependency
 
+from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
+
 m2ev = codata.c * codata.h / codata.e
 
 VERTICAL = 1
@@ -1478,6 +1480,7 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
 
         self.data_dict = dictionary
 
+add_widget_parameters_to_module(__name__)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
