@@ -25,19 +25,20 @@ class OWChannelCut(OWOpticalElement):
 
     reflector_or_crystal = Setting(0)
     crystal_separation = Setting(0.005)
+    footprint_index = Setting(1)
     pitch = Setting(0.0)
     roll = Setting(0.0)
     yaw = Setting(0.0)
 
     def __init__(self):
-        super().__init__(has_footprint=False)
+        super().__init__(has_footprint=True)
 
     def create_basic_settings_subtabs(self, tabs_basic_settings):
         return oasysgui.createTabPage(tabs_basic_settings, "Channel Cut")  # to be populated
 
     def populate_basic_setting_subtabs(self, tab_1):
         gui.comboBox(tab_1, self, "reflector_or_crystal", tooltip="reflector_or_crystal",
-                     label="Plane-surface reflecivity", labelWidth=120,
+                     label="Plane-surface reflecivity", labelWidth=180,
                      items=["ideal reflector",
                             "Si111 crystal"],
                      sendSelectedValue=False, orientation="horizontal",
@@ -45,14 +46,25 @@ class OWChannelCut(OWOpticalElement):
         oasysgui.lineEdit(tab_1, self, "crystal_separation", "Crystal separation [m]",
                           tooltip="crystal_separation",
                           labelWidth=260, valueType=float, orientation="horizontal")
-        oasysgui.lineEdit(tab_1, self, "pitch", "Misalign pitch [rad]", tooltip="pitch",
-                          labelWidth=260, valueType=float, orientation="horizontal")
-        oasysgui.lineEdit(tab_1, self, "roll", "Misalign roll [rad]", tooltip="roll",
-                          labelWidth=260, valueType=float, orientation="horizontal")
-        oasysgui.lineEdit(tab_1, self, "yaw", "Misalign yaw [rad]", tooltip="yaw",
-                          labelWidth=260, valueType=float, orientation="horizontal")
+
+
+        gui.comboBox(tab_1, self, "footprint_index", tooltip="footprint_index",
+                     label="Show footprint for", labelWidth=180,
+                     items=["first reflector/crystal",
+                            "second reflector/crystal"],
+                     sendSelectedValue=False, orientation="horizontal",)
+
         gui.separator(self.tab_basic_settings)
 
+        misalignments_box = oasysgui.widgetBox(tab_1, "Misalignments", addSpace=False, orientation="vertical")
+        oasysgui.lineEdit(misalignments_box, self, "pitch", "Misalign pitch [rad]", tooltip="pitch",
+                          labelWidth=260, valueType=float, orientation="horizontal")
+        oasysgui.lineEdit(misalignments_box, self, "roll", "Misalign roll [rad]", tooltip="roll",
+                          labelWidth=260, valueType=float, orientation="horizontal")
+        oasysgui.lineEdit(misalignments_box, self, "yaw", "Misalign yaw [rad]", tooltip="yaw",
+                          labelWidth=260, valueType=float, orientation="horizontal")
+
+        gui.separator(self.tab_basic_settings)
 
     def get_optical_element_instance(self):
         try:
@@ -122,7 +134,7 @@ class OWChannelCut(OWOpticalElement):
                                               # 0=xraylib,1=dabax,2=preprocessor v1,3=preprocessor v2
                                               )
 
-        return S4Compound(name=name, oe_list=[optical_element1, optical_element2])
+        return S4Compound(name=name, oe_list=[optical_element1, optical_element2], footprint_index=self.footprint_index)
 
 
 
@@ -149,7 +161,7 @@ if __name__ == "__main__":
     from AnyQt.QtWidgets import QApplication
     a = QApplication(sys.argv)
     ow = OWChannelCut()
-    # ow.set_shadow_data(get_test_beam())
+    ow.set_shadow_data(get_test_beam())
     ow.show()
     a.exec()
     ow.saveSettings()
