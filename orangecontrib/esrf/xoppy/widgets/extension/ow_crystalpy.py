@@ -358,13 +358,20 @@ class OWCrystalpy(XoppyWidgetDabax):
 
             self.setStatusMessage("Plotting Results")
 
-            self.progressBarFinished()
+            for index in range(0, len(self.getTitles())):
+                x_index, y_index = self.getVariablesToPlot()[index]
+                log_x, log_y = self.getLogPlot()[index]
+                print("   >>  ", index, x_index, y_index, log_x, log_y)
+
+            self.plot_results(self.calculated_data, progressBarValue=60)
+
+            self.setStatusMessage("")
+
+            # self.send("xoppy_data", self.calculated_data)
 
         except Exception as exception:
 
             QMessageBox.critical(self, "Error", str(exception), QMessageBox.Ok)
-
-            self.progressBarFinished()
 
             if self.IS_DEVELOP: raise exception
 
@@ -378,18 +385,6 @@ class OWCrystalpy(XoppyWidgetDabax):
         # print(">>>  ytitles = " ,  self.getYTitles())
         # print(">>>  col X = ", self.calculated_data.get_content("plot_x_col"))
         # print(">>>  col Y = ", self.calculated_data.get_content("plot_y_col"))
-
-        for index in range(0, len(self.getTitles())):
-            x_index, y_index = self.getVariablesToPlot()[index]
-            log_x, log_y = self.getLogPlot()[index]
-            print("   >>  ", index, x_index, y_index, log_x, log_y)
-
-        self.plot_results(self.calculated_data, progressBarValue=60)
-
-        self.setStatusMessage("")
-
-        self.send("xoppy_data", self.calculated_data)
-
 
         self.progressBarFinished()
 
