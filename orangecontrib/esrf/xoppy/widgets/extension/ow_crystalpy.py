@@ -30,7 +30,7 @@ from xoppylib.crystals.tools import run_diff_pat, bragg_calc2
 from crystalpy.util.calc_xcrystal import calc_xcrystal_angular_scan, calc_xcrystal_energy_scan, calc_xcrystal_alphazachariasen_scan
 
 class OWCrystalpy(XoppyWidgetDabax):
-    name = "CRYSTAL"
+    name = "CRYSTAL-PY"
     id = "orange.widgets.crystalpy"
     description = "Crystal Reflectivity (perfect)"
     icon = "icons/xoppy_xcrystal.png"
