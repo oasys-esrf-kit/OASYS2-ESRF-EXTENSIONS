@@ -326,36 +326,47 @@ class OWCrystalpy(XoppyWidgetDabax):
     def compute(self):
         self.setStatusMessage("Running XOPPY")
 
-        self.progressBarInit()
+        try:
+            self.progressBarInit()
 
-        script = self.do_xoppy_calculation_script()
-        self.xoppy_script.set_code(script)
+            script = self.do_xoppy_calculation_script()
+            self.xoppy_script.set_code(script)
 
 
-        self.xoppy_output.setText("")
+            self.xoppy_output.setText("")
 
-        sys.stdout = EmittingStream(textWritten=self.writeStdOut)
+            sys.stdout = EmittingStream(textWritten=self.writeStdOut)
 
-        self.progressBarSet(20)
+            self.progressBarSet(20)
 
-        self.check_fields()
+            self.check_fields()
 
-        # self.calculated_data = self.calculate_with_complex_amplitude_photon()
+            # self.calculated_data = self.calculate_with_complex_amplitude_photon()
 
-        calculation_output = self.do_xoppy_calculation()
+            calculation_output = self.do_xoppy_calculation()
 
-        self.progressBarSet(50)
+            self.progressBarSet(50)
 
-        # calculation_output = None
+            # calculation_output = None
 
-        if calculation_output is None:
-            raise Exception("Xoppy gave no result")
-        else:
-            self.calculated_data = self.extract_data_from_xoppy_output(calculation_output)
+            if calculation_output is None:
+                raise Exception("Xoppy gave no result")
+            else:
+                self.calculated_data = self.extract_data_from_xoppy_output(calculation_output)
 
-            self.add_specific_content_to_calculated_data(self.calculated_data)
+                self.add_specific_content_to_calculated_data(self.calculated_data)
 
-        self.setStatusMessage("Plotting Results")
+            self.setStatusMessage("Plotting Results")
+
+            self.progressBarFinished()
+
+        except Exception as exception:
+
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.Ok)
+
+            self.progressBarFinished()
+
+            if self.IS_DEVELOP: raise exception
 
 
         # test output
