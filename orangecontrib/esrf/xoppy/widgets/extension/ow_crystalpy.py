@@ -83,18 +83,18 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "CRYSTAL_MATERIAL_XRAYLIB",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=self.get_crystal_list_xraylib(),
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
 
         #widget index 3
         idx += 1
         box1 = gui.widgetBox(box)
         gui.comboBox(box1, self, "CRYSTAL_MATERIAL_DABAX",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=self.get_crystal_list_dabax(),
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
 
@@ -135,27 +135,27 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "GEOMETRY",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['BRAGG: diffr beam', 'LAUE: diffr beam', 'BRAGG: transm beam', 'LAUE: transm beam'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
         #widget index 11 
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "SCAN",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['Theta (absolute)', 'Th - Th Bragg (corrected)', 'Th - Th Bragg', 'Energy [eV]', 'y (Zachariasen)'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
         #widget index 12 
         idx += 1 
         box1 = gui.widgetBox(box) 
         self.unit_combo = gui.comboBox(box1, self, "UNIT",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['Radians', 'micro rads', 'Degrees', 'ArcSec'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
         #widget index 13 
@@ -215,36 +215,36 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "CALCULATION_METHOD",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['Zachariasen', 'Guigay'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
         #widget index 19b
         idx += 1
         box1 = gui.widgetBox(box)
         gui.comboBox(box1, self, "IS_THICK",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['No', 'Yes'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
         #widget index 19
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "USE_TRANSFER_MATRIX",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['No', 'Yes'],
-                    valueType=int, orientation="horizontal", labelWidth=250)
+                    orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
         #widget index 21
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "CALCULATION_STRATEGY_FLAG",
-                     label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx], addSpace=False,
                     items=['mpmath', 'numpy native [to avoid]', 'numpy truncated'],
-                    valueType=int, orientation="horizontal", labelWidth=150)
+                    orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
 
     def unitLabels(self):
