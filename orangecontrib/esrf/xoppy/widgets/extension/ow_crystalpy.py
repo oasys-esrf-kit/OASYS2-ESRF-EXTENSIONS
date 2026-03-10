@@ -1,4 +1,5 @@
 import numpy
+import sys
 
 from orangewidget import gui
 from orangewidget.settings import Setting
