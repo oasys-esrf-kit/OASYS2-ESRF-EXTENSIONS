@@ -10,7 +10,6 @@ from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 from orangecontrib.xoppy.widgets.gui.ow_xoppy_widget_dabax import XoppyWidgetDabax
 
-
 import scipy.constants as codata
 
 from AnyQt.QtGui import QPalette, QColor, QFont
@@ -29,6 +28,7 @@ except: pass
 from xoppylib.crystals.tools import run_diff_pat, bragg_calc2
 
 from crystalpy.util.calc_xcrystal import calc_xcrystal_angular_scan, calc_xcrystal_energy_scan, calc_xcrystal_alphazachariasen_scan
+from crystalpy.util.calc_xcrystal import apply_convolution_on_bunch_out_dict
 
 class OWCrystalpy(XoppyWidgetDabax):
     name = "CRYSTAL-PY"
@@ -62,6 +62,10 @@ class OWCrystalpy(XoppyWidgetDabax):
     CALCULATION_STRATEGY_FLAG = Setting(0)
     USE_TRANSFER_MATRIX = Setting(0)
 
+    CHI_DEG = Setting(45.0)
+    FLAG_CONVOLUTION = Setting(0)
+    SIGMA_RAD = Setting(0.001)
+
     def __init__(self):
         super().__init__(show_script_tab=True)
 
@@ -76,6 +80,8 @@ class OWCrystalpy(XoppyWidgetDabax):
         box = oasysgui.createTabPage(tabs_setting, self.name + " Input Parameters")
         self.tab_dabax = oasysgui.createTabPage(tabs_setting, "Materials Library")
         ###########
+
+        tab_advanced = oasysgui.createTabPage(tabs_setting, "Advanced")
 
         idx = -1 
         
@@ -209,7 +215,10 @@ class OWCrystalpy(XoppyWidgetDabax):
         #
         # advanced parameters
         #
-        boxAdvanced = oasysgui.widgetBox(self.controlArea, "Advanced Parameters", orientation="vertical")#, width=self.CONTROL_AREA_WIDTH-5)
+        # boxAdvanced = oasysgui.widgetBox(self.controlArea, "Advanced Parameters", orientation="vertical")#, width=self.CONTROL_AREA_WIDTH-5)
+        boxAdvanced = oasysgui.widgetBox(tab_advanced, "Advanced Parameters",
+                                         orientation="vertical")  # , width=self.CONTROL_AREA_WIDTH-5)
+
 
         #widget index 19
         idx += 1
@@ -247,18 +256,45 @@ class OWCrystalpy(XoppyWidgetDabax):
                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
 
+        #widget index 22
+        idx += 1
+        box1 = gui.widgetBox(boxAdvanced)
+        oasysgui.lineEdit(box1, self, "CHI_DEG",
+                     label=self.unitLabels()[idx], addSpace=False,
+                    valueType=float, orientation="horizontal", labelWidth=250)
+        self.show_at(self.unitFlags()[idx], box1)
+
+        #widget index 23
+        idx += 1
+        box1 = gui.widgetBox(boxAdvanced)
+        gui.comboBox(box1, self, "FLAG_CONVOLUTION",
+                    label=self.unitLabels()[idx], addSpace=False,
+                    items=['No', 'with Gaussian'],
+                    orientation="horizontal", labelWidth=150)
+        self.show_at(self.unitFlags()[idx], box1)
+
+        #widget index 24
+        idx += 1
+        box1 = gui.widgetBox(boxAdvanced)
+        oasysgui.lineEdit(box1, self, "SIGMA_RAD",
+                     label=self.unitLabels()[idx], addSpace=False,
+                    valueType=float, orientation="horizontal", labelWidth=250)
+        self.show_at(self.unitFlags()[idx], box1)
+
     def unitLabels(self):
          return ['Crystal (xraylib list):','Crystal (dabax list):','h Miller index','k Miller index','l Miller index','Temperature factor [see help]:', # 0-5
                  'Geometry:','Scan:','Scan Units:','Min Scan value:','Max Scan value:','Scan Points:', # 6-12
                  'Fix value (E[eV] or Theta[deg])','Asymmetry angle [deg] (to surf.)','Crystal Thickness [cm]:', # 13-15
-                 'Calculation method', 'Thick crystal approximation', 'Use transfer matrix', 'exp,sin,cos use']
+                 'Calculation method', 'Thick crystal approximation', 'Use transfer matrix', 'exp,sin,cos use',
+                 'chi rotation [default=45]', 'convolve Stokes', 'sigma [rad]']
 
 
     def unitFlags(self):
          return ['self.MATERIAL_CONSTANT_LIBRARY_FLAG == 0','self.MATERIAL_CONSTANT_LIBRARY_FLAG == 1','True','True','True','True',
                  'True','True','self.SCAN  <=  2','True','True','True',
                  'True','True','True',
-                 'True','self.CALCULATION_METHOD == 1','self.CALCULATION_METHOD == 1', 'True']
+                 'True','self.CALCULATION_METHOD == 1','self.CALCULATION_METHOD == 1', 'True',
+                 'True','True','self.FLAG_CONVOLUTION == 1',]
 
     def get_help_name(self):
         return 'crystal'
@@ -341,9 +377,10 @@ class OWCrystalpy(XoppyWidgetDabax):
 
             self.check_fields()
 
+            calculation_output = self.do_xoppy_calculation()
+
             # self.calculated_data = self.calculate_with_complex_amplitude_photon()
 
-            calculation_output = self.do_xoppy_calculation()
 
             self.progressBarSet(50)
 
@@ -392,7 +429,8 @@ class OWCrystalpy(XoppyWidgetDabax):
         return "XCRYSTAL"
 
     def getTitles(self):
-        return ["Phase_p","Phase_s","Circ. Polariz.","p-polarized reflectivity","s-polarized reflectivity"]
+        return ["Phase_p","Phase_s","Circ. Polariz.","p-polarized reflectivity","s-polarized reflectivity",
+                "P0","P1","P2","P3"]
 
     def getXTitles(self):
 
@@ -401,23 +439,40 @@ class OWCrystalpy(XoppyWidgetDabax):
                     "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
                     "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
                     "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
-                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]"]
+                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
+                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
+                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
+                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
+                    "Th-ThB{in} [" + self.unit_combo.itemText(self.UNIT) + "]",
+                    ]
         elif self.SCAN == 3:
             return ["Energy [eV]",
                     "Energy [eV]",
                     "Energy [eV]",
                     "Energy [eV]",
-                    "Energy [eV]"]
+                    "Energy [eV]",
+                    "Energy [eV]",
+                    "Energy [eV]",
+                    "Energy [eV]",
+                    "Energy [eV]"
+                    ]
         else:
             return ["y (Zachariasen)",
                     "y (Zachariasen)",
                     "y (Zachariasen)",
                     "y (Zachariasen)",
-                    "y (Zachariasen)"]
+                    "y (Zachariasen)",
+                    "y (Zachariasen)",
+                    "y (Zachariasen)",
+                    "y (Zachariasen)",
+                    "y (Zachariasen)",
+                    ]
 
 
     def getYTitles(self):
-        return ["phase_p [rad]","phase_s [rad]","Circ. Polariz.","p-polarized reflectivity","s-polarized reflectivity"]
+        return ["phase_p [rad]","phase_s [rad]","Circ. Polariz.",
+                "p-polarized reflectivity","s-polarized reflectivity",
+                "P0","P1","P2","P3"]
 
     def getVariablesToPlot(self):
         """
@@ -425,13 +480,14 @@ class OWCrystalpy(XoppyWidgetDabax):
         UNIT = Setting(1) # ['Radians', 'micro rads', 'Degrees', 'ArcSec']
         """
         if self.SCAN == 3:
-            return [(1, 2), (1, 3), (1, 4), (1, 5), (1, 6)]
+            return [(1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8), (1, 9), (1, 10)]
         else:
-            return [(0, 2), (0, 3), (0, 4), (0, 5), (0, 6)]
+            return [(0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8), (0, 9), (0, 10)]
 
 
     def getLogPlot(self):
-        return[(False, False), (False, False), (False, False), (False, False), (False, False)]
+        return[(False, False), (False, False), (False, False), (False, False), (False, False),
+               (False, False), (False, False), (False, False), (False, False)]
 
     def plot_histo(self, x, y, progressBarValue, tabs_canvas_index, plot_canvas_index, title="", xtitle="", ytitle="", log_x=False, log_y=False):
         super().plot_histo(x, y,progressBarValue, tabs_canvas_index, plot_canvas_index, title, xtitle, ytitle, log_x, log_y)
@@ -506,6 +562,7 @@ class OWCrystalpy(XoppyWidgetDabax):
                 'calculation_strategy_flag': self.CALCULATION_STRATEGY_FLAG,
                 'material_constants_library_flag': self.MATERIAL_CONSTANT_LIBRARY_FLAG,
                 'dx_str'                         : dx_str,
+                'chi_deg': self.CHI_DEG,
             }
 
             script_template =  """
@@ -525,6 +582,8 @@ bunch_out_dict, diffraction_setup, deviations = calc_xcrystal_angular_scan(
     angle_deviation_max       = {angle_deviation_max:g}, # in rad
     angle_deviation_points    = {angle_deviation_points},
     angle_center_flag         = {angle_center_flag},
+    chi_deg                   = {chi_deg:g},
+    flag_calculate_stokes     = 1,
     calculation_method        = {calculation_method}, # 0=Zachariasen, 1=Guigay
     is_thick                  = {is_thick},
     use_transfer_matrix       = {use_transfer_matrix},
@@ -711,12 +770,20 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
                 angle_deviation_max    = self.SCANTO * self.get_units_to_radians(),
                 angle_deviation_points = self.SCANPOINTS,
                 angle_center_flag      = angle_center_flag,
+                chi_deg                = 45.0,
+                flag_calculate_stokes  = 1,
                 calculation_method     = self.CALCULATION_METHOD,
                 is_thick               = self.IS_THICK,
                 use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
                 geometry_type_index    = self.GEOMETRY,
                 calculation_strategy_flag = self.CALCULATION_STRATEGY_FLAG,
             )
+
+            if self.FLAG_CONVOLUTION:
+                bunch_out_dict = apply_convolution_on_bunch_out_dict(bunch_out_dict,
+                                                                          flag_convolve_with_gaussian=2,
+                                                                          sigma=self.SIGMA_RAD)
+
             return bunch_out_dict, diffraction_setup, deviations
         elif self.SCAN == 3: # energy scan
             bunch_out_dict, diffraction_setup, energies = calc_xcrystal_energy_scan(
@@ -775,7 +842,7 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         if self.SCAN in (0,1,2):
             bunch_out_dict, diffraction_setup, deviations = calculation_output
 
-            tmp = numpy.zeros((bunch_out_dict["energies"].size,7))
+            tmp = numpy.zeros((bunch_out_dict["energies"].size,7+4))
             tmp[:, 0] = deviations / self.get_units_to_radians()
             tmp[:, 1] = self.ENERGY
             tmp[:, 2] = bunch_out_dict["phaseP"]
@@ -783,6 +850,13 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
             tmp[:, 4] = 2 * numpy.sqrt(bunch_out_dict["intensityP"] * bunch_out_dict["intensityS"]) * numpy.sin(bunch_out_dict["phaseP"] - bunch_out_dict["phaseS"])
             tmp[:, 5] = bunch_out_dict["intensityP"]
             tmp[:, 6] = bunch_out_dict["intensityS"]
+            try:
+                tmp[:, 7] = bunch_out_dict["P0"]
+                tmp[:, 8] = bunch_out_dict["P1"]
+                tmp[:, 9] = bunch_out_dict["P2"]
+                tmp[:,10] = bunch_out_dict["P3"]
+            except:
+                pass
 
             if self.SCAN in (1, 2):
                 wavelength = codata.h * codata.c / codata.e / self.ENERGY * 1e2  # cm
@@ -796,7 +870,7 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         elif self.SCAN == 3: # energy scan
             bunch_out_dict, diffraction_setup, energies = calculation_output
 
-            tmp = numpy.zeros((bunch_out_dict["energies"].size,7))
+            tmp = numpy.zeros((bunch_out_dict["energies"].size,7+4))
             tmp[:, 0] = numpy.radians(self.ENERGY)
             tmp[:, 1] = energies
             tmp[:, 2] = bunch_out_dict["phaseP"]
@@ -804,13 +878,20 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
             # tmp[:, 4] = circular polarization
             tmp[:, 5] = bunch_out_dict["intensityP"]
             tmp[:, 6] = bunch_out_dict["intensityS"]
+            try:
+                tmp[:, 7] = bunch_out_dict["P0"]
+                tmp[:, 8] = bunch_out_dict["P1"]
+                tmp[:, 9] = bunch_out_dict["P2"]
+                tmp[:,10] = bunch_out_dict["P3"]
+            except:
+                pass
 
             calculated_data.add_content("plot_x_col", 1)
 
         elif self.SCAN == 4:  # alpha zachariasen scan
             bunch_out_dict, diffraction_setup, deviations = calculation_output
 
-            tmp = numpy.zeros((bunch_out_dict["energies"].size,7))
+            tmp = numpy.zeros((bunch_out_dict["energies"].size,7+4))
             tmp[:, 0] = deviations
             tmp[:, 1] = self.ENERGY
             tmp[:, 2] = bunch_out_dict["phaseP"]
@@ -818,6 +899,13 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
             # tmp[:, 4] = circular polarization
             tmp[:, 5] = bunch_out_dict["intensityP"]
             tmp[:, 6] = bunch_out_dict["intensityS"]
+            try:
+                tmp[:, 7] = bunch_out_dict["P0"]
+                tmp[:, 8] = bunch_out_dict["P1"]
+                tmp[:, 9] = bunch_out_dict["P2"]
+                tmp[:,10] = bunch_out_dict["P3"]
+            except:
+                pass
 
             calculated_data.add_content("plot_x_col", 0)
 
@@ -832,6 +920,12 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
                                      "s-polarized reflectivity"])
         calculated_data.add_content("info", "info blah blah")
 
+        print("\n>>> calculated_data shape:", tmp.shape)
+        print(">>> sending (duplicated??) calculated_data", calculated_data)
+        print('>>> retrieve with: data = in_object_1.get_contents("xoppy_data")')
+        print("\n")
+
+        self.Outputs.xoppy_data.send(self.calculated_data)
         return calculated_data
 
 add_widget_parameters_to_module(__name__)
