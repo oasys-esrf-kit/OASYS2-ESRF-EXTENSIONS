@@ -62,7 +62,10 @@ class OWCrystalpy(XoppyWidgetDabax):
     CALCULATION_STRATEGY_FLAG = Setting(0)
     USE_TRANSFER_MATRIX = Setting(0)
 
+
+    FLAG_CALCULATE_STOKES = Setting(2)
     CHI_DEG = Setting(45.0)
+    JONES_IN = Setting("[1,0]")
     FLAG_CONVOLUTION = Setting(0)
     SIGMA_RAD = Setting(0.001)
 
@@ -218,7 +221,8 @@ class OWCrystalpy(XoppyWidgetDabax):
         # boxAdvanced = oasysgui.widgetBox(self.controlArea, "Advanced Parameters", orientation="vertical")#, width=self.CONTROL_AREA_WIDTH-5)
         boxAdvanced = oasysgui.widgetBox(tab_advanced, "Advanced Parameters",
                                          orientation="vertical")  # , width=self.CONTROL_AREA_WIDTH-5)
-
+        boxStokes = oasysgui.widgetBox(tab_advanced, "Stokes parameters",
+                                         orientation="vertical")  # , width=self.CONTROL_AREA_WIDTH-5)
 
         #widget index 19
         idx += 1
@@ -256,26 +260,45 @@ class OWCrystalpy(XoppyWidgetDabax):
                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
 
-        #widget index 22
+
+        # widget index 22
         idx += 1
-        box1 = gui.widgetBox(boxAdvanced)
-        oasysgui.lineEdit(box1, self, "CHI_DEG",
+        box1 = gui.widgetBox(boxStokes)
+        gui.comboBox(box1, self, "FLAG_CALCULATE_STOKES",
                      label=self.unitLabels()[idx], addSpace=False,
-                    valueType=float, orientation="horizontal", labelWidth=250)
+                     items=['No', 'Yes', 'Yes, normalized'],
+                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
 
-        #widget index 23
+        # widget index 23
         idx += 1
-        box1 = gui.widgetBox(boxAdvanced)
+        box1 = gui.widgetBox(boxStokes)
+        oasysgui.lineEdit(box1, self, "CHI_DEG",
+                          label=self.unitLabels()[idx], addSpace=False,
+                          valueType=float, orientation="horizontal", labelWidth=250)
+        self.show_at(self.unitFlags()[idx], box1)
+
+        # widget index 24
+        idx += 1
+        box1 = gui.widgetBox(boxStokes)
+        oasysgui.lineEdit(box1, self, "JONES_IN",
+                          label=self.unitLabels()[idx], addSpace=False,
+                          valueType=str, orientation="horizontal", labelWidth=250)
+        self.show_at(self.unitFlags()[idx], box1)
+
+
+        #widget index 25
+        idx += 1
+        box1 = gui.widgetBox(boxStokes)
         gui.comboBox(box1, self, "FLAG_CONVOLUTION",
                     label=self.unitLabels()[idx], addSpace=False,
                     items=['No', 'with Gaussian'],
                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
 
-        #widget index 24
+        #widget index 26
         idx += 1
-        box1 = gui.widgetBox(boxAdvanced)
+        box1 = gui.widgetBox(boxStokes)
         oasysgui.lineEdit(box1, self, "SIGMA_RAD",
                      label=self.unitLabels()[idx], addSpace=False,
                     valueType=float, orientation="horizontal", labelWidth=250)
@@ -286,7 +309,8 @@ class OWCrystalpy(XoppyWidgetDabax):
                  'Geometry:','Scan:','Scan Units:','Min Scan value:','Max Scan value:','Scan Points:', # 6-12
                  'Fix value (E[eV] or Theta[deg])','Asymmetry angle [deg] (to surf.)','Crystal Thickness [cm]:', # 13-15
                  'Calculation method', 'Thick crystal approximation', 'Use transfer matrix', 'exp,sin,cos use',
-                 'chi rotation [default=45]', 'convolve Stokes', 'sigma [rad]']
+                 'Calculate Stokes', 'chi rotation [deg]', 'Jones in',
+                 'convolve Stokes', 'sigma [rad]']
 
 
     def unitFlags(self):
@@ -294,7 +318,8 @@ class OWCrystalpy(XoppyWidgetDabax):
                  'True','True','self.SCAN  <=  2','True','True','True',
                  'True','True','True',
                  'True','self.CALCULATION_METHOD == 1','self.CALCULATION_METHOD == 1', 'True',
-                 'True','True','self.FLAG_CONVOLUTION == 1',]
+                 'True', "self.FLAG_CALCULATE_STOKES > 0", "self.FLAG_CALCULATE_STOKES > 0",
+                 "self.FLAG_CALCULATE_STOKES > 0","self.FLAG_CALCULATE_STOKES > 0 and self.FLAG_CONVOLUTION == 1"]
 
     def get_help_name(self):
         return 'crystal'
@@ -561,9 +586,21 @@ class OWCrystalpy(XoppyWidgetDabax):
                 'get_units_to_radians'   : self.get_units_to_radians(),
                 'calculation_strategy_flag': self.CALCULATION_STRATEGY_FLAG,
                 'material_constants_library_flag': self.MATERIAL_CONSTANT_LIBRARY_FLAG,
-                'dx_str'                         : dx_str,
-                'chi_deg': self.CHI_DEG,
+                'dx_str'                  : dx_str,
+                'flag_calculate_stokes'   : self.FLAG_CALCULATE_STOKES,
+                'chi_deg'                 : self.CHI_DEG,
+                'jones_in'                : self.JONES_IN,
+                'conv_code'               : ""
             }
+
+            if self.FLAG_CONVOLUTION:
+                txt = "from crystalpy.util.calc_xcrystal import apply_convolution_on_bunch_out_dict"
+                txt += "\nbunch_out_dict = apply_convolution_on_bunch_out_dict(bunch_out_dict, sigma=%g)" % self.SIGMA_RAD
+                txt += "\ntmp[:, 7] = bunch_out_dict['P0']"
+                txt += "\ntmp[:, 8] = bunch_out_dict['P1']"
+                txt += "\ntmp[:, 9] = bunch_out_dict['P2']"
+                txt += "\ntmp[:,10] = bunch_out_dict['P3']"
+                fmt_dict["conv_code"] = txt
 
             script_template =  """
 import numpy
@@ -582,8 +619,9 @@ bunch_out_dict, diffraction_setup, deviations = calc_xcrystal_angular_scan(
     angle_deviation_max       = {angle_deviation_max:g}, # in rad
     angle_deviation_points    = {angle_deviation_points},
     angle_center_flag         = {angle_center_flag},
-    chi_deg                   = {chi_deg:g},
-    flag_calculate_stokes     = 1,
+    flag_calculate_stokes   = {flag_calculate_stokes}, # 0=No, 1=Yes, 2=Yes normalized
+    jones_in                  = {jones_in},  # for flag_calculate_stokes > 0
+    chi_deg                   = {chi_deg:g}, # for flag_calculate_stokes > 0
     calculation_method        = {calculation_method}, # 0=Zachariasen, 1=Guigay
     is_thick                  = {is_thick},
     use_transfer_matrix       = {use_transfer_matrix},
@@ -593,7 +631,7 @@ bunch_out_dict, diffraction_setup, deviations = calc_xcrystal_angular_scan(
     dabax = {dx_str}, # for material_constants_library_flag=1, the pointer to DabaxXraylib()
             )
 
-tmp = numpy.zeros((bunch_out_dict["energies"].size,7))
+tmp = numpy.zeros((bunch_out_dict["energies"].size,7+4))
 tmp[:, 0] = deviations / {get_units_to_radians}
 tmp[:, 1] = {energy}
 tmp[:, 2] = bunch_out_dict["phaseP"]
@@ -601,6 +639,8 @@ tmp[:, 3] = bunch_out_dict["phaseS"]
 # tmp[:, 4] = circular polarization
 tmp[:, 5] = bunch_out_dict["intensityP"]
 tmp[:, 6] = bunch_out_dict["intensityS"]
+
+{conv_code}
 
 from srxraylib.plot.gol import plot
 plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="angle", legend=["S-pol","P-pol"])
@@ -770,8 +810,9 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
                 angle_deviation_max    = self.SCANTO * self.get_units_to_radians(),
                 angle_deviation_points = self.SCANPOINTS,
                 angle_center_flag      = angle_center_flag,
-                chi_deg                = 45.0,
-                flag_calculate_stokes  = 1,
+                flag_calculate_stokes  = self.FLAG_CALCULATE_STOKES,
+                chi_deg                = self.CHI_DEG,
+                jones_in               = [1,0],
                 calculation_method     = self.CALCULATION_METHOD,
                 is_thick               = self.IS_THICK,
                 use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
@@ -780,9 +821,7 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
             )
 
             if self.FLAG_CONVOLUTION:
-                bunch_out_dict = apply_convolution_on_bunch_out_dict(bunch_out_dict,
-                                                                          flag_convolve_with_gaussian=2,
-                                                                          sigma=self.SIGMA_RAD)
+                bunch_out_dict = apply_convolution_on_bunch_out_dict(bunch_out_dict, sigma=self.SIGMA_RAD)
 
             return bunch_out_dict, diffraction_setup, deviations
         elif self.SCAN == 3: # energy scan
