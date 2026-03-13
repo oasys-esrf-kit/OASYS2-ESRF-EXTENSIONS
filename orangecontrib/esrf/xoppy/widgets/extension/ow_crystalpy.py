@@ -1,5 +1,6 @@
 import numpy
 import sys
+from ast import literal_eval
 
 from orangewidget import gui
 from orangewidget.settings import Setting
@@ -812,7 +813,7 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
                 angle_center_flag      = angle_center_flag,
                 flag_calculate_stokes  = self.FLAG_CALCULATE_STOKES,
                 chi_deg                = self.CHI_DEG,
-                jones_in               = [1,0],
+                jones_in               = literal_eval(self.JONES_IN),
                 calculation_method     = self.CALCULATION_METHOD,
                 is_thick               = self.IS_THICK,
                 use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
