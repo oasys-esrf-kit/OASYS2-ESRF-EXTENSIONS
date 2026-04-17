@@ -1,3 +1,4 @@
+import numpy
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Input
@@ -52,6 +53,7 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
     MASK_V_MIN              = Setting(-1000.0)
     MASK_V_MAX              = Setting( 1000.0)
     H5_FILE_DUMP            = Setting(0)
+    photon_energy_bin       = Setting(100)
 
     class Inputs:
         syned_data = WidgetDecorator.syned_input_data()
@@ -296,6 +298,15 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
                     items=['No', 'Yes: undulator_power_density_from_harmonics.h5'], orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
+        #widget index **
+        idx += 1
+        box1 = gui.widgetBox(box)
+        oasysgui.lineEdit(box1, self, "photon_energy_bin",
+                     label=self.unitLabels()[idx],
+                    valueType=float, orientation="horizontal", labelWidth=250)
+        self.show_at(self.unitFlags()[idx], box1)
+
+
     def unitLabels(self):
          return ["Use emittances","Electron Energy [GeV]", "Electron Energy Spread", "Electron Current [A]",\
                  "Electron Beam Size H [m]", "Electron Beam Size V [m]", "Electron Beam Divergence H [rad]", "Electron Beam Divergence V [rad]", \
@@ -304,7 +315,8 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
                  "Distance to slit [m]", "Slit gap H [m]", "Slit gap V [m]", "Number of slit mesh points in H", "Number of slit mesh points in V",\
                  "calculation code","number of harmonics",\
                  "modify slit","Rotation around H axis [deg]","Rotation around V axis [deg]","Mask H min [mm]","Mask H max [mm]",'Mask V min [mm]',"Mask V max [mm]",\
-                 "Dump hdf5 file"]
+                 "Dump hdf5 file",
+                 "Energy bin [eV] (for Spectral Power)"]
 
     def unitFlags(self):
          return ["True","True", "self.USEEMITTANCES == 1 and self.METHOD != 1", "True",\
@@ -314,6 +326,7 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
                  "True", "True", "True", "True", "True",\
                  "True","True",\
                  "True","self.MASK_FLAG == 1","self.MASK_FLAG == 1","self.MASK_FLAG == 1","self.MASK_FLAG == 1","self.MASK_FLAG == 1","self.MASK_FLAG == 1",\
+                 "True",
                  "True"]
 
     def get_help_name(self):
@@ -358,15 +371,47 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
                 h = data[0]
                 v = data[1]
                 p = data[2]
+                p_harmonics = data[3]
+                e_harmonics = data[4]
 
                 try:
 
                     print("\nResult arrays (shapes): ", h.shape, v.shape, p.shape )
 
+                    # tab 0 Power density
                     self.plot_data2D(p, h, v, 0, 0,
                                      xtitle='H [mm]',
                                      ytitle='V [mm]',
                                      title='Code '+code+'; Power density [W/mm^2]')
+                    # tab 1 Power density per harmonic
+                    s = p_harmonics.shape
+                    self.plot_data3D(p_harmonics, numpy.arange(s[0]), h, v, 1, 0,
+                                    title="harmonic", xtitle="H [mm]", ytitle="V [mm]", color_limits_uniform=False,
+                                     title_callback=lambda idx: "harmonic: %d (index: %d) " % (idx+1, idx))
+
+                    # tab 2 Spectral Power
+
+                    energies = e_harmonics.flatten()  # Flatten all energy values
+                    powers = p_harmonics.flatten() * (h[1] - h[0]) * (v[1] - v[0])  # Flatten corresponding power contributions
+
+                    # Define bins
+                    de = self.photon_energy_bin  # eV
+                    e_bins = numpy.arange(energies.min(), energies.max() + de, de)
+                    print("Spectrum calculated from histogramming in photon energy: min max delta. n_bins: ",
+                          energies.min(), energies.max(), de, e_bins.size)
+
+                    # Bin the powers into energy bins
+                    power_vs_energy, bin_edges = numpy.histogram(energies, bins=e_bins, weights=powers)
+                    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+                    self.plot_data1D(bin_centers, power_vs_energy / de, 2, 0, title="Spectral Power",
+                                     xtitle="Photon Energy [eV]", ytitle="Spectral Power [W/eV]",
+                                     control=False, xlog=False, ylog=False)
+
+                    # tab 3 Cumulated power
+                    self.plot_data1D(bin_centers, power_vs_energy.cumsum(), 3, 0, title="Spectral Power",
+                                     xtitle="Photon Energy [eV]", ytitle="Cumulated Power [W]",
+                                     control=False, xlog=False, ylog=False)
 
                 except Exception as e:
                     self.view_type_combo.setEnabled(True)
@@ -411,12 +456,13 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
             "MASK_V_MIN":self.MASK_V_MIN,
             "MASK_V_MAX":self.MASK_V_MAX,
             "harmonic_max": self.harmonic_max,
+            "photon_energy_bin": self.photon_energy_bin,
         }
 
         script = self.script_template().format_map(h5_parameters)
         self.xoppy_script.set_code(script)
 
-        h, v, p, code, power_density_harmonics, energy_harmonics =  \
+        h, v, p, code, power_density_harmonics, energy_harmonics, spectral_power, spectral_power_energy =  \
             xoppy_calc_undulator_power_density_from_harmonics(
                                                    ELECTRONENERGY=self.ELECTRONENERGY,
                                                    ELECTRONENERGYSPREAD=self.ELECTRONENERGYSPREAD,
@@ -445,13 +491,14 @@ class OWundulator_power_density_from_harmonics(XoppyWidget, WidgetDecorator):
                                                    MASK_V_MIN=self.MASK_V_MIN,
                                                    MASK_V_MAX=self.MASK_V_MAX,
                                                    h5_file=h5_file,
-                                                   h5_entry_name="XOPPY_POWERDENSITY",
+                                                   h5_entry_name="XOPPY_POWERDENSITY_FROM_HARMONICS",
                                                    h5_initialize=True,
                                                    h5_parameters=h5_parameters,
                                                    harmonic_max=self.harmonic_max,
+                                                   photon_energy_bin=self.photon_energy_bin,
                                                    )
 
-        return h, v, p, code, script
+        return h, v, p, code, script, power_density_harmonics, energy_harmonics, spectral_power, spectral_power_energy
 
     def script_template(self):
         return """
@@ -489,9 +536,10 @@ h5_parameters["MASK_H_MAX"]=               {MASK_H_MAX}
 h5_parameters["MASK_V_MIN"]=               {MASK_V_MIN}
 h5_parameters["MASK_V_MAX"]=               {MASK_V_MAX}
 h5_parameters["harmonic_max"]=             {harmonic_max}  # maximum harmonic to calculate
+h5_parameters["photon_energy_bin"]=        {photon_energy_bin}  # in eV, for calculating Spectral Power
 
         
-horizontal, vertical, power_density, code, power_density_harmonics, energy_harmonics = \
+h, v, power_density, code, power_density_harmonics, energy_harmonics, spectral_power, spectral_power_energy = \
     xoppy_calc_undulator_power_density_from_harmonics(
     ELECTRONENERGY           =  h5_parameters["ELECTRONENERGY"],
     ELECTRONENERGYSPREAD     =  h5_parameters["ELECTRONENERGYSPREAD"],
@@ -521,15 +569,26 @@ horizontal, vertical, power_density, code, power_density_harmonics, energy_harmo
     MASK_V_MIN               =  h5_parameters["MASK_V_MIN"],
     MASK_V_MAX               =  h5_parameters["MASK_V_MAX"],
     h5_file                  =  "undulator_power_density_from_harmonics.h5",
-    h5_entry_name            =  "XOPPY_POWERDENSITY",
+    h5_entry_name            =  "XOPPY_POWERDENSITY_FROM_HARMONICS",
     h5_initialize            =  True,
     h5_parameters            =  h5_parameters,
+    photon_energy_bin        =  h5_parameters["photon_energy_bin"],
     )
+    
 # example plot
 if True:
-    from srxraylib.plot.gol import plot_image
-    #plot_image(power_density, horizontal, vertical, xtitle="H [mm]", ytitle="V [mm]", title="Power density W/mm2")
-    plot_image(power_density_harmonics.sum(axis=0), horizontal, vertical, xtitle="H [mm]", ytitle="V [mm]", title="Power density W/mm2")
+    # Power Density
+    from srxraylib.plot.gol import plot, plot_image
+    plot_image(power_density_harmonics.sum(axis=0), h, v, xtitle="H [mm]", ytitle="V [mm]", title="Power density W/mm2")
+
+    # Spectral Power & Cumulated Power
+    plot(spectral_power_energy, spectral_power, xtitle="Photon energy [eV]",
+         ytitle="Spectral Power [W/eV]", grid=1,
+         title="Spectral Power (bin: %.3f eV)" % (h5_parameters['photon_energy_bin']))                    
+    de = spectral_power_energy[1] - spectral_power_energy[0]
+    plot(spectral_power_energy, (spectral_power * de).cumsum(), xtitle="Photon energy [eV]",
+         ytitle="Cumulated Power [W]", grid=1,
+         title="Cumulated Power (bin: %.3f eV)" % (h5_parameters['photon_energy_bin']))                    
 
 #
 # end script
@@ -538,21 +597,21 @@ if True:
 
 
     def extract_data_from_xoppy_output(self, calculation_output):
-        h, v, p, code, script = calculation_output
+        h, v, p, code, script, p_harmonics, e_harmonics, spectral_power, spectral_power_energy = calculation_output
 
         calculated_data = DataExchangeObject("XOPPY", self.get_data_exchange_widget_name())
 
-        calculated_data.add_content("xoppy_data", [h, v, p])
+        calculated_data.add_content("xoppy_data", [h, v, p, p_harmonics, e_harmonics, spectral_power, spectral_power_energy])
         calculated_data.add_content("xoppy_code",  code)
         calculated_data.add_content("xoppy_script", script)
 
         return calculated_data
 
     def get_data_exchange_widget_name(self):
-        return "UNDULATOR_POWER_DENSITY"
+        return "UNDULATOR_POWER_DENSITY_FROM_HARMONICS"
 
     def getTitles(self):
-        return ['Undulator Power Density']
+        return ['Undulator Power Density', 'Harmonics Power Density', 'Spectral Power', 'Cumulated Power']
 
     @Inputs.syned_data
     def receive_syned_data(self, data):
