@@ -54,7 +54,7 @@ import sys
 from setuptools import find_packages, setup
 
 NAME = 'OASYS2-ESRF-EXTENSIONS'
-VERSION = '0.0.10'
+VERSION = '0.0.11'
 ISRELEASED = False
 
 DESCRIPTION = 'oasys2-esrf-extensions'
@@ -90,8 +90,8 @@ INSTALL_REQUIRES = (
                     'oasys2>=0.0.19',
                     'pandas',
                     'numba',
-                    'accelerator-toolbox==0.6.1',
                     'oasys-barc4ro>=2024.11.13',
+                    # 'accelerator-toolbox==0.6.1', # in stand-by, gives problems in windows
                     # 'crystalpy>=0.0.25',  # todo: remove?, base lib of oasys2
                     # 'shadow4>=0.1.70',
                     # 'xoppylib>=1.0.46',

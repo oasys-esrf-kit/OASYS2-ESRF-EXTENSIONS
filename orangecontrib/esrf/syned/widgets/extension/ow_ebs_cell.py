@@ -21,7 +21,15 @@ from oasys2.widget.gui import MessageDialog, ConfirmDialog
 
 import orangecanvas.resources as resources
 
-import at  # accelerator toolbox
+try:
+    import at  # accelerator toolbox
+    lattice_file = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.data"), 'S28F_all_BM.mat')
+    AT_LATTICE = at.load_lattice(lattice_file)
+except:
+    print("at (accelerator toolbox) not available")
+    lattice_file = ""
+    AT_LATTICE = None
+
 
 from oasys2.widget.util.widget_util import EmittingStream
 
@@ -31,8 +39,7 @@ VERTICAL = 1
 HORIZONTAL = 2
 BOTH = 3
 
-lattice_file = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.data"), 'S28F_all_BM.mat')
-AT_LATTICE = at.load_lattice(lattice_file)
+
 
 def get_electron_beam_parameters_from_at(r0=AT_LATTICE, id_number=1, s_locs=None, npoints=10, verbose=False):
     id = f'ID{id_number:02d}'

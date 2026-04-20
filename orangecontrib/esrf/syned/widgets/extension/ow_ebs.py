@@ -25,8 +25,6 @@ from oasys2.widget.gui import ConfirmDialog
 
 import orangecanvas.resources as resources
 
-import at  # accelerator toolbox
-
 from orangecontrib.wofry.widgets.gui.python_script import PythonScript  # NOTE: existing dependency
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
@@ -37,9 +35,14 @@ VERTICAL = 1
 HORIZONTAL = 2
 BOTH = 3
 
-lattice_file = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.data"), 'S28F_all_BM.mat')
-AT_LATTICE = at.load_lattice(lattice_file)
-
+try:
+    import at  # accelerator toolbox
+    lattice_file = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.data"), 'S28F_all_BM.mat')
+    AT_LATTICE = at.load_lattice(lattice_file)
+except:
+    print("at (accelerator toolbox) not available")
+    lattice_file = ""
+    AT_LATTICE = None
 
 def get_electron_beam_parameters_from_at(id=1, verbose=0):
     if verbose:
