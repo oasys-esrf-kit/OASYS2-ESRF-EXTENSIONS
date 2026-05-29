@@ -41,7 +41,7 @@ class OWCrystalpy(XoppyWidgetDabax):
     keywords = ["xoppy", "xcrystal"]
 
 
-    CRYSTAL_MATERIAL_XRAYLIB = Setting(32)
+    CRYSTAL_MATERIAL_XRAYLIB = Setting(0)
     CRYSTAL_MATERIAL_DABAX = Setting(0)
     MILLER_INDEX_H = Setting(1)
     MILLER_INDEX_K = Setting(1)
@@ -93,7 +93,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "CRYSTAL_MATERIAL_XRAYLIB",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=self.get_crystal_list_xraylib(),
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
@@ -102,7 +102,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(box)
         gui.comboBox(box1, self, "CRYSTAL_MATERIAL_DABAX",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=self.get_crystal_list_dabax(),
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
@@ -112,7 +112,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "MILLER_INDEX_H",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=int, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -120,7 +120,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "MILLER_INDEX_K",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=int, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -128,7 +128,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "MILLER_INDEX_L",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=int, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
 
@@ -137,7 +137,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "TEMPER",
-                     label=self.unitLabels()[idx], addSpace=False, orientation="horizontal", labelWidth=250)
+                     label=self.unitLabels()[idx], orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
 
         
@@ -145,7 +145,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "GEOMETRY",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['BRAGG: diffr beam', 'LAUE: diffr beam', 'BRAGG: transm beam', 'LAUE: transm beam'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
@@ -154,7 +154,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         gui.comboBox(box1, self, "SCAN",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['Theta (absolute)', 'Th - Th Bragg (corrected)', 'Th - Th Bragg', 'Energy [eV]', 'y (Zachariasen)'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
@@ -163,7 +163,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         self.unit_combo = gui.comboBox(box1, self, "UNIT",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['Radians', 'micro rads', 'Degrees', 'ArcSec'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
@@ -172,7 +172,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "SCANFROM",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -180,7 +180,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "SCANTO",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -188,7 +188,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "SCANPOINTS",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=int, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -196,7 +196,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "ENERGY",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -204,7 +204,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "ASYMMETRY_ANGLE",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1) 
         
@@ -212,7 +212,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1 
         box1 = gui.widgetBox(box) 
         oasysgui.lineEdit(box1, self, "THICKNESS",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
@@ -229,7 +229,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "CALCULATION_METHOD",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['Zachariasen', 'Guigay'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
@@ -238,7 +238,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(box)
         gui.comboBox(box1, self, "IS_THICK",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['No', 'Yes'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
@@ -247,7 +247,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "USE_TRANSFER_MATRIX",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['No', 'Yes'],
                     orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
@@ -256,7 +256,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxAdvanced)
         gui.comboBox(box1, self, "CALCULATION_STRATEGY_FLAG",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['mpmath', 'numpy native [to avoid]', 'numpy truncated'],
                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
@@ -266,7 +266,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxStokes)
         gui.comboBox(box1, self, "FLAG_CALCULATE_STOKES",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                      items=['No', 'Yes', 'Yes, normalized'],
                      orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
@@ -275,7 +275,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxStokes)
         oasysgui.lineEdit(box1, self, "CHI_DEG",
-                          label=self.unitLabels()[idx], addSpace=False,
+                          label=self.unitLabels()[idx],
                           valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
@@ -283,7 +283,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxStokes)
         oasysgui.lineEdit(box1, self, "JONES_IN",
-                          label=self.unitLabels()[idx], addSpace=False,
+                          label=self.unitLabels()[idx],
                           valueType=str, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
@@ -292,7 +292,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxStokes)
         gui.comboBox(box1, self, "FLAG_CONVOLUTION",
-                    label=self.unitLabels()[idx], addSpace=False,
+                    label=self.unitLabels()[idx],
                     items=['No', 'with Gaussian'],
                     orientation="horizontal", labelWidth=150)
         self.show_at(self.unitFlags()[idx], box1)
@@ -301,7 +301,7 @@ class OWCrystalpy(XoppyWidgetDabax):
         idx += 1
         box1 = gui.widgetBox(boxStokes)
         oasysgui.lineEdit(box1, self, "SIGMA_RAD",
-                     label=self.unitLabels()[idx], addSpace=False,
+                     label=self.unitLabels()[idx],
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
@@ -354,8 +354,10 @@ class OWCrystalpy(XoppyWidgetDabax):
 
 
     def get_crystal_list_xraylib(self):
-        return list(xraylib.Crystal_GetCrystalsList())
-
+        try:
+            return list(xraylib.Crystal_GetCrystalsList())
+        except:
+            return []
 
     def get_crystal_list_dabax(self):
         self.dx = DabaxXraylib()
@@ -787,6 +789,11 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         else:
             crystal_name = self.get_crystal_list_dabax()[self.CRYSTAL_MATERIAL_DABAX]
 
+        if self.MATERIAL_CONSTANT_LIBRARY_FLAG == 0:
+            material_constants_library = None
+        elif self.MATERIAL_CONSTANT_LIBRARY_FLAG == 1:
+            material_constants_library = DabaxXraylib(file_f1f2=dabax_f1f2_files()[self.DABAX_F1F2_FILE_INDEX])
+            print(material_constants_library.info())
 
         if self.SCAN in (0,1,2):
             angle_center_flag = self.SCAN
@@ -800,25 +807,27 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         if self.SCAN in (0,1,2):
             bunch_out_dict, diffraction_setup, deviations = calc_xcrystal_angular_scan(
                 # material_constants_library_flag=self.material_constants_library_flag,
-                crystal_name           = crystal_name,
-                thickness              = self.THICKNESS * 1e-2,  # meters
-                miller_h               = self.MILLER_INDEX_H,
-                miller_k               = self.MILLER_INDEX_K,
-                miller_l               = self.MILLER_INDEX_L,
-                asymmetry_angle        = numpy.radians(self.ASYMMETRY_ANGLE) ,
-                energy                 = self.ENERGY ,
-                angle_deviation_min    = self.SCANFROM * self.get_units_to_radians(),
-                angle_deviation_max    = self.SCANTO * self.get_units_to_radians(),
-                angle_deviation_points = self.SCANPOINTS,
-                angle_center_flag      = angle_center_flag,
-                flag_calculate_stokes  = self.FLAG_CALCULATE_STOKES,
-                chi_deg                = self.CHI_DEG,
-                jones_in               = literal_eval(self.JONES_IN),
-                calculation_method     = self.CALCULATION_METHOD,
-                is_thick               = self.IS_THICK,
-                use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
-                geometry_type_index    = self.GEOMETRY,
-                calculation_strategy_flag = self.CALCULATION_STRATEGY_FLAG,
+                crystal_name                    = crystal_name,
+                thickness                       = self.THICKNESS * 1e-2,  # meters
+                miller_h                        = self.MILLER_INDEX_H,
+                miller_k                        = self.MILLER_INDEX_K,
+                miller_l                        = self.MILLER_INDEX_L,
+                asymmetry_angle                 = numpy.radians(self.ASYMMETRY_ANGLE) ,
+                energy                          = self.ENERGY ,
+                angle_deviation_min             = self.SCANFROM * self.get_units_to_radians(),
+                angle_deviation_max             = self.SCANTO * self.get_units_to_radians(),
+                angle_deviation_points          = self.SCANPOINTS,
+                angle_center_flag               = angle_center_flag,
+                flag_calculate_stokes           = self.FLAG_CALCULATE_STOKES,
+                chi_deg                         = self.CHI_DEG,
+                jones_in                        = literal_eval(self.JONES_IN),
+                calculation_method              = self.CALCULATION_METHOD,
+                is_thick                        = self.IS_THICK,
+                use_transfer_matrix             = self.USE_TRANSFER_MATRIX,
+                geometry_type_index             = self.GEOMETRY,
+                calculation_strategy_flag       = self.CALCULATION_STRATEGY_FLAG,
+                material_constants_library_flag = self.MATERIAL_CONSTANT_LIBRARY_FLAG,
+                dabax                           = material_constants_library,
             )
 
             if self.FLAG_CONVOLUTION:
@@ -828,41 +837,45 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         elif self.SCAN == 3: # energy scan
             bunch_out_dict, diffraction_setup, energies = calc_xcrystal_energy_scan(
                 # material_constants_library_flag=self.material_constants_library_flag,
-                crystal_name           = crystal_name,
-                thickness              = self.THICKNESS * 1e-2,  # meters
-                miller_h               = self.MILLER_INDEX_H,
-                miller_k               = self.MILLER_INDEX_K,
-                miller_l               = self.MILLER_INDEX_L,
-                asymmetry_angle        = numpy.radians(self.ASYMMETRY_ANGLE) ,
-                energy_min             = self.SCANFROM,
-                energy_max             = self.SCANTO,
-                energy_points          = self.SCANPOINTS,
-                theta                  = numpy.radians(self.ENERGY),
-                calculation_method     = self.CALCULATION_METHOD,
-                is_thick               = self.IS_THICK,
-                use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
-                geometry_type_index    = self.GEOMETRY,
-                calculation_strategy_flag = self.CALCULATION_STRATEGY_FLAG,
+                crystal_name                    = crystal_name,
+                thickness                       = self.THICKNESS * 1e-2,  # meters
+                miller_h                        = self.MILLER_INDEX_H,
+                miller_k                        = self.MILLER_INDEX_K,
+                miller_l                        = self.MILLER_INDEX_L,
+                asymmetry_angle                 = numpy.radians(self.ASYMMETRY_ANGLE) ,
+                energy_min                      = self.SCANFROM,
+                energy_max                      = self.SCANTO,
+                energy_points                   = self.SCANPOINTS,
+                theta                           = numpy.radians(self.ENERGY),
+                calculation_method              = self.CALCULATION_METHOD,
+                is_thick                        = self.IS_THICK,
+                use_transfer_matrix             = self.USE_TRANSFER_MATRIX,
+                geometry_type_index             = self.GEOMETRY,
+                calculation_strategy_flag       = self.CALCULATION_STRATEGY_FLAG,
+                material_constants_library_flag = self.MATERIAL_CONSTANT_LIBRARY_FLAG,
+                dabax                           = material_constants_library,
             )
             return bunch_out_dict, diffraction_setup, energies
         elif self.SCAN == 4:  # alpha zachariasen scan
             bunch_out_dict, diffraction_setup, deviations = calc_xcrystal_alphazachariasen_scan(
                 # material_constants_library_flag=self.material_constants_library_flag,
-                crystal_name           = crystal_name,
-                thickness              = self.THICKNESS * 1e-2,  # meters
-                miller_h               = self.MILLER_INDEX_H,
-                miller_k               = self.MILLER_INDEX_K,
-                miller_l               = self.MILLER_INDEX_L,
-                asymmetry_angle        = numpy.radians(self.ASYMMETRY_ANGLE) ,
-                energy                 = self.ENERGY ,
-                angle_deviation_min    = self.SCANFROM,
-                angle_deviation_max    = self.SCANTO,
-                angle_deviation_points = self.SCANPOINTS,
-                calculation_method     = self.CALCULATION_METHOD,
-                is_thick               = self.IS_THICK,
-                use_transfer_matrix    = self.USE_TRANSFER_MATRIX,
-                geometry_type_index    = self.GEOMETRY,
-                calculation_strategy_flag = self.CALCULATION_STRATEGY_FLAG,
+                crystal_name                    = crystal_name,
+                thickness                       = self.THICKNESS * 1e-2,  # meters
+                miller_h                        = self.MILLER_INDEX_H,
+                miller_k                        = self.MILLER_INDEX_K,
+                miller_l                        = self.MILLER_INDEX_L,
+                asymmetry_angle                 = numpy.radians(self.ASYMMETRY_ANGLE) ,
+                energy                          = self.ENERGY ,
+                angle_deviation_min             = self.SCANFROM,
+                angle_deviation_max             = self.SCANTO,
+                angle_deviation_points          = self.SCANPOINTS,
+                calculation_method              = self.CALCULATION_METHOD,
+                is_thick                        = self.IS_THICK,
+                use_transfer_matrix             = self.USE_TRANSFER_MATRIX,
+                geometry_type_index             = self.GEOMETRY,
+                calculation_strategy_flag       = self.CALCULATION_STRATEGY_FLAG,
+                material_constants_library_flag = self.MATERIAL_CONSTANT_LIBRARY_FLAG,
+                dabax                           = material_constants_library,
             )
             return bunch_out_dict, diffraction_setup, deviations
         else:
@@ -965,7 +978,7 @@ plot(tmp[:,0], tmp[:,6], tmp[:,0], tmp[:,5], xtitle="y", legend=["S-pol","P-pol"
         print('>>> retrieve with: data = in_object_1.get_contents("xoppy_data")')
         print("\n")
 
-        self.Outputs.xoppy_data.send(self.calculated_data)
+        self.Outputs.xoppy_data.send(calculated_data)
         return calculated_data
 
 add_widget_parameters_to_module(__name__)
