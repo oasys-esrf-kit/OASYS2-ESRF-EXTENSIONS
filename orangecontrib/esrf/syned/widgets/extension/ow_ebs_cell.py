@@ -281,6 +281,16 @@ class OWEBSCELL(OWWidget):
         self.info_id.ensureCursorVisible()
 
     def refresh(self):
+
+        try:
+            assert(AT_LATTICE is not None)
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", "Wrong AT_LATTICE:\nDid you pip install accelerator-toolbox?",
+                                 QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
+            return
+
+
         n_id = self.get_id_number()
 
         try:

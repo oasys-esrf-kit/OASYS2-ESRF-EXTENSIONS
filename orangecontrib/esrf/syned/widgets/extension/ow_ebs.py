@@ -589,9 +589,18 @@ class OWEBS(OWWidget):
         return id
 
     def set_ebs_electron_beam_S28F(self):
-        self.type_of_properties = 1
 
-        data, epsilonX, epsilonY = get_electron_beam_parameters_from_at(id=self.get_id_number())
+
+        try:
+            self.type_of_properties = 1
+            data, epsilonX, epsilonY = get_electron_beam_parameters_from_at(id=self.get_id_number())
+        except Exception as exception:
+            self.type_of_properties = 1
+            self.type_of_properties_initial_selection = 1
+            QMessageBox.critical(self, "Error", "Wrong AT_LATTICE:\nDid you pip install accelerator-toolbox?",
+                                 QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
+            return
 
         self.electron_beam_size_h = numpy.round(1e-6 * data[0, 21], 11)
         self.electron_beam_size_v = numpy.round(1e-6 * data[0, 22], 11)
