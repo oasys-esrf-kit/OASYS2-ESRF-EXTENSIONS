@@ -1,4 +1,7 @@
+import sys
 import numpy
+from AnyQt.QtWidgets import QMessageBox
+from cryptography.x509 import load_pem_x509_certificate
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Input
@@ -14,14 +17,20 @@ from syned.widget.widget_decorator import WidgetDecorator
 import syned.beamline.beamline as synedb
 import syned.storage_ring.magnetic_structures.insertion_device as synedid
 
-from spectrum_builder import get_spectrum
-from spectrum_builder import list_detectors, list_isotopes
+
+try:
+    from spectrum_builder import get_spectrum
+    from spectrum_builder import list_detectors, list_isotopes
+    SPECTRUM_BUILDER_INSTALLED = 1
+except:
+    SPECTRUM_BUILDER_INSTALLED = 0
+    print("spectrum_builder not installed.")
 
 class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
     name = "Isotope spectrum"
     id = "orange.widgets.isotope_spectrum"
     description = "Spectrum of isotope emission"
-    icon = "icons/isotop.png"
+    icon = "icons/isotope.png"
     priority = 0.5
     category = ""
     keywords = ["xoppy", "isotop_spectrum"]
@@ -37,11 +46,21 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
     energy_max                  = Setting(200.0)
 
     # retrieve lists for the 3 detectors
-    l0 = list_isotopes(list_detectors()[0])
-    l1 = list_isotopes(list_detectors()[1])
-    l2 = list_isotopes(list_detectors()[2])
-    # full list
-    lall = sorted(set(l0 + l1 + l2))
+    try:
+        ldetectors = list_detectors()
+        l0 = list_isotopes(ldetectors[0])
+        l1 = list_isotopes(ldetectors[1])
+        l2 = list_isotopes(ldetectors[2])
+        # full list
+        lall = sorted(set(l0 + l1 + l2))
+
+    except:
+        l0 = []
+        l1 = []
+        l2 = []
+        lall = []
+        ldetectors = []
+
 
     USEEMITTANCES=0
 
@@ -59,7 +78,7 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
         idx += 1
         box1 = gui.widgetBox(box)
         gui.comboBox(box1, self, "detector_index", label=self.unitLabels()[idx],
-                     items=list_detectors(), orientation="horizontal", labelWidth=250)
+                     items=self.ldetectors, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
 
@@ -103,18 +122,6 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
         gui.comboBox(box1, self, "normalization_type", label=self.unitLabels()[idx],
                      items=['Raw counts', 'Counts per second (cps)', 'Unit area'], orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
-
-
-        # detector_index = Setting(0)
-        # isotop_index = Setting(6)
-        # number_of_bins = Setting(1024)
-        # number_of_signal_events = Setting(100000)
-        # number_of_background_events = Setting(0)
-        # normalization_type = Setting(0)
-        # random_seed = Setting(42)
-        # energy_min = Setting(0.0)
-        # energy_max = Setting(200.0)
-
         #
         idx += 1
         box1 = gui.widgetBox(box)
@@ -139,17 +146,6 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
                     valueType=float, orientation="horizontal", labelWidth=250)
         self.show_at(self.unitFlags()[idx], box1)
 
-
-        # detector_index = Setting(0)
-        # isotop_index = Setting(6)
-        # number_of_bins = Setting(1024)
-        # number_of_signal_events = Setting(100000)
-        # number_of_background_events = Setting(0)
-        # normalization_type = Setting(0)
-        # random_seed = Setting(42)
-        # energy_min = Setting(0.0)
-        # energy_max = Setting(200.0)
-
     def unitLabels(self):
          return ["Detector", "Isotope", "Number of bins", "Number of signal events", \
                  "Number of background events", "Normalization type", "Random seed", \
@@ -162,30 +158,12 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
         return 'isotope_spectrum'
 
     def check_fields(self):
-
-        pass
-        # self.ELECTRONENERGY = congruence.checkStrictlyPositiveNumber(self.ELECTRONENERGY, "Electron Energy")
-        # if not self.METHOD == 1: self.ELECTRONENERGYSPREAD = congruence.checkPositiveNumber(self.ELECTRONENERGYSPREAD, "Electron Energy Spread")
-        # self.ELECTRONCURRENT = congruence.checkStrictlyPositiveNumber(self.ELECTRONCURRENT, "Electron Current")
-        # self.ELECTRONBEAMSIZEH = congruence.checkPositiveNumber(self.ELECTRONBEAMSIZEH, "Electron Beam Size H")
-        # self.ELECTRONBEAMSIZEV = congruence.checkPositiveNumber(self.ELECTRONBEAMSIZEV, "Electron Beam Size V")
-        # self.ELECTRONBEAMDIVERGENCEH = congruence.checkPositiveNumber(self.ELECTRONBEAMDIVERGENCEH, "Electron Beam Divergence H")
-        # self.ELECTRONBEAMDIVERGENCEV = congruence.checkPositiveNumber(self.ELECTRONBEAMDIVERGENCEV, "Electron Beam Divergence V")
-        # self.PERIODID = congruence.checkStrictlyPositiveNumber(self.PERIODID, "Period ID")
-        # self.NPERIODS = congruence.checkStrictlyPositiveNumber(self.NPERIODS, "Number of Periods")
-        # self.KV = congruence.checkPositiveNumber(self.KV, "Kv")
-        # self.KH = congruence.checkPositiveNumber(self.KH, "Kh")
-        # self.KPHASE = congruence.checkNumber(self.KPHASE, "Kphase")
-        # self.DISTANCE = congruence.checkPositiveNumber(self.DISTANCE, "Distance to slit")
-        # self.GAPH = congruence.checkPositiveNumber(self.GAPH, "Slit gap H")
-        # self.GAPV = congruence.checkPositiveNumber(self.GAPV, "Slit gap V")
-        # self.HSLITPOINTS = congruence.checkStrictlyPositiveNumber(self.HSLITPOINTS, "Number of slit mesh points in H")
-        # self.VSLITPOINTS = congruence.checkStrictlyPositiveNumber(self.VSLITPOINTS, "Number of slit mesh points in V")
-        #
-        # if  self.METHOD == 1: # URGENT
-        #     congruence.checkLessOrEqualThan(self.HSLITPOINTS, 51, "Number of slit mesh points for URGENT "," 51")
-        #     congruence.checkLessOrEqualThan(self.VSLITPOINTS, 51, "Number of slit mesh points for URGENT "," 51")
-
+        self.number_of_bins = congruence.checkStrictlyPositiveNumber(self.number_of_bins, "number_of_bins")
+        self.number_of_signal_events = congruence.checkPositiveNumber(self.number_of_signal_events, "number_of_signal_events")
+        self.number_of_background_events = congruence.checkPositiveNumber(self.number_of_background_events, "number_of_background_events")
+        self.random_seed = congruence.checkNumber(self.random_seed, "random_seed")
+        self.energy_min = congruence.checkPositiveNumber(self.energy_min, "energy_min")
+        self.energy_max = congruence.checkStrictlyPositiveNumber(self.energy_max, "energy_max")
 
     def plot_results(self, calculated_data, progressBarValue=80):
         if not self.view_type == 0:
@@ -199,20 +177,13 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
                 # code = calculated_data.get_content("xoppy_code")
 
                 try:
-
-
-
-                    # tab 2 Spectral Power
-                    title = "Isotope: %s, Detector: %s " % (self.lall[self.isotop_index], list_detectors()[self.detector_index])
-
+                    # Spectrum
+                    title = "Isotope: %s, Detector: %s " % (self.lall[self.isotop_index], self.ldetectors[self.detector_index])
                     self.plot_data1D(data[:, 0] * 1e-3, data[:, 1], 0, 0, title=title,
                                      xtitle="Photon Energy [keV]", ytitle="Intensity [counts]",
                                      control=False, xlog=False, ylog=False)
-
-
                 except Exception as e:
                     self.view_type_combo.setEnabled(True)
-
                     raise Exception("Data not plottable: bad content\n" + str(e))
 
                 self.view_type_combo.setEnabled(True)
@@ -221,46 +192,70 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
 
     def do_xoppy_calculation(self):
 
-        detector = list_detectors()[self.detector_index]
+        if not SPECTRUM_BUILDER_INSTALLED:
+            QMessageBox.information(self, "Missing installation",
+                                    "Please: \n %s -m pip install spectrum-builder>=1.0.5" % sys.executable,
+                                    QMessageBox.StandardButton.Ok)
+            return
+
+        detector = self.ldetectors[self.detector_index]
         isotope = self.lall[self.isotop_index]
 
-        if isotope in self.lall:
-            pass
+        print("** list of available isotopes for the three different detectors **")
+        print("           in  %s    %s     %s" % (self.ldetectors[0], self.ldetectors[1], self.ldetectors[2]))
+        for i, isot in enumerate(self.lall):
+            print(isot, isot in self.l0, isot in self.l1, isot in self.l2)
+
+        if self.detector_index == 0:
+            lnow = self.l0
+        elif self.detector_index == 1:
+            lnow = self.l1
+        elif self.detector_index == 2:
+            lnow = self.l2
         else:
-            raise ValueError("Isotope %s not supported for %s detector." % (isotope, detector))
+            raise ValueError
 
-        print(isotope, detector)
-        parameters = {
-            "detector"                    : detector,
-            "isotope"                     : isotope,
-            "number_of_bins"              : self.number_of_bins,
-            "number_of_signal_events"     : self.number_of_signal_events,
-            "number_of_background_events" : self.number_of_background_events,
-            "normalization_type"          : self.normalization_type,
-            "random_seed"                 : self.random_seed,
-            "energy_min"                  : self.energy_min,
-            "energy_max"                  : self.energy_max,
-        }
-        print(parameters)
+        if isotope in lnow:
+            parameters = {
+                "detector"                    : detector,
+                "isotope"                     : isotope,
+                "number_of_bins"              : self.number_of_bins,
+                "number_of_signal_events"     : self.number_of_signal_events,
+                "number_of_background_events" : self.number_of_background_events,
+                "normalization_type"          : self.normalization_type,
+                "random_seed"                 : self.random_seed,
+                "energy_min"                  : self.energy_min,
+                "energy_max"                  : self.energy_max,
+            }
+            print(parameters)
 
-        script = self.script_template().format_map(parameters)
-        self.xoppy_script.set_code(script)
+            script = self.script_template().format_map(parameters)
+            self.xoppy_script.set_code(script)
 
-        print(isotope, self.isotop_index, detector, self.detector_index, isotope in self.lall)
+            print(isotope, self.isotop_index, detector, self.detector_index, isotope in self.lall)
 
-        spectrum = get_spectrum(
-            detector=detector,
-            isotope=isotope,
-            number_of_bins=self.number_of_bins,
-            number_of_signal_events=self.number_of_signal_events,
-            number_of_background_events=self.number_of_background_events,
-            normalization_type=self.normalization_type,
-            random_seed=self.random_seed,
-            energy_range=(self.energy_min, self.energy_max),
-        )
+            spectrum = get_spectrum(
+                detector=detector,
+                isotope=isotope,
+                number_of_bins=self.number_of_bins,
+                number_of_signal_events=self.number_of_signal_events,
+                number_of_background_events=self.number_of_background_events,
+                normalization_type=self.normalization_type,
+                random_seed=self.random_seed,
+                energy_range=(self.energy_min, self.energy_max),
+            )
+        else:
+            spectrum = numpy.zeros((100,2))
+            script = "# Error: Spectrum not found"
+            self.xoppy_script.set_code(script)
+            # raise ValueError("Isotope %s not supported for %s detector." % (isotope, detector))
+            QMessageBox.information(self, "Missing spectrum",
+                                    "Isotope %s not supported for %s detector." % (isotope, detector),
+                                    QMessageBox.StandardButton.Ok)
 
-        spectrum[:, 0] = spectrum[:, 0] * 1e3 # in eV
-        return spectrum, script
+        spectrum1 = spectrum.copy()
+        spectrum1[:, 0] = spectrum[:, 0] * 1e3 # in eV
+        return spectrum1, script
 
     def script_template(self):
         return """
