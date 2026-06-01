@@ -54,7 +54,7 @@ import sys
 from setuptools import find_packages, setup
 
 NAME = 'OASYS2-ESRF-EXTENSIONS'
-VERSION = '0.0.12'
+VERSION = '0.0.13'
 ISRELEASED = False
 
 DESCRIPTION = 'oasys2-esrf-extensions'
@@ -87,7 +87,7 @@ SETUP_REQUIRES = (
                   )
 
 INSTALL_REQUIRES = (
-                    'oasys2>=0.0.20',
+                    'oasys2>=0.0.19',
                     'pandas',
                     'numba',
                     'oasys-barc4ro>=2024.11.13',
