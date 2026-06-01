@@ -28,11 +28,16 @@ class OWBoxOfFilters(OWOpticalElement):
     icon = "icons/box_of_filters.png"
     priority = 3.1
 
-    att1 = Setting(0)
-    att2 = Setting(0)
-    att3 = Setting(0)
-    att4 = Setting(0)
-    att5 = Setting(0)
+    att1  = Setting(0)
+    att2  = Setting(0)
+    att3  = Setting(0)
+    att4  = Setting(0)
+    att5  = Setting(0)
+    att6  = Setting(0)
+    att7  = Setting(0)
+    att8  = Setting(0)
+    att9  = Setting(0)
+    att10 = Setting(0)
 
     n_blocks = Setting(3)
     syned_file_name = Setting("https://raw.githubusercontent.com/oasys-esrf-kit/OASYS1-ESRF-Extensions/master/orangecontrib/esrf/xoppy/data/bm05_wb_attenuators.json")
@@ -71,7 +76,7 @@ class OWBoxOfFilters(OWOpticalElement):
         box1 = gui.widgetBox(filter_box)
         gui.comboBox(box1, self, "n_blocks",
                      label="Number of blocks or axes", addSpace=False,
-                     items=['0','1','2','3','4','5'], callback=self.set_visibility,
+                     items=['0','1','2','3','4','5','6','7','8','9','10'], callback=self.set_visibility,
                      valueType=int, orientation="horizontal", labelWidth=250, editable=0)
 
         self.wid_att1 = gui.widgetBox(box1)
@@ -99,6 +104,31 @@ class OWBoxOfFilters(OWOpticalElement):
                                             label="Att5", addSpace=False,
                                             items=['Empty'],
                                             valueType=int, orientation="horizontal", labelWidth=150, editable=1)
+        self.wid_att6 = gui.widgetBox(box1)
+        self.wid_att6_combo = gui.comboBox(self.wid_att6, self, "att6",
+                                            label="Att6", addSpace=False,
+                                            items=['Empty'],
+                                            valueType=int, orientation="horizontal", labelWidth=150, editable=1)
+        self.wid_att7 = gui.widgetBox(box1)
+        self.wid_att7_combo = gui.comboBox(self.wid_att7, self, "att7",
+                                            label="Att7", addSpace=False,
+                                            items=['Empty'],
+                                            valueType=int, orientation="horizontal", labelWidth=150, editable=1)
+        self.wid_att8 = gui.widgetBox(box1)
+        self.wid_att8_combo = gui.comboBox(self.wid_att8, self, "att8",
+                                            label="Att8", addSpace=False,
+                                            items=['Empty'],
+                                            valueType=int, orientation="horizontal", labelWidth=150, editable=1)
+        self.wid_att9 = gui.widgetBox(box1)
+        self.wid_att9_combo = gui.comboBox(self.wid_att9, self, "att9",
+                                            label="Att9", addSpace=False,
+                                            items=['Empty'],
+                                            valueType=int, orientation="horizontal", labelWidth=150, editable=1)
+        self.wid_att10 = gui.widgetBox(box1)
+        self.wid_att10_combo = gui.comboBox(self.wid_att10, self, "att10",
+                                            label="Att10", addSpace=False,
+                                            items=['Empty'],
+                                            valueType=int, orientation="horizontal", labelWidth=150, editable=1)
 
         self.set_visibility()
 
@@ -108,12 +138,22 @@ class OWBoxOfFilters(OWOpticalElement):
         self.wid_att3.setVisible(False)
         self.wid_att4.setVisible(False)
         self.wid_att5.setVisible(False)
+        self.wid_att6.setVisible(False)
+        self.wid_att7.setVisible(False)
+        self.wid_att8.setVisible(False)
+        self.wid_att9.setVisible(False)
+        self.wid_att10.setVisible(False)
 
-        if self.n_blocks >= 1: self.wid_att1.setVisible(True)
-        if self.n_blocks >= 2: self.wid_att2.setVisible(True)
-        if self.n_blocks >= 3: self.wid_att3.setVisible(True)
-        if self.n_blocks >= 4: self.wid_att4.setVisible(True)
-        if self.n_blocks >= 5: self.wid_att5.setVisible(True)
+        if self.n_blocks >= 1:  self.wid_att1.setVisible(True)
+        if self.n_blocks >= 2:  self.wid_att2.setVisible(True)
+        if self.n_blocks >= 3:  self.wid_att3.setVisible(True)
+        if self.n_blocks >= 4:  self.wid_att4.setVisible(True)
+        if self.n_blocks >= 5:  self.wid_att5.setVisible(True)
+        if self.n_blocks >= 6:  self.wid_att6.setVisible(True)
+        if self.n_blocks >= 7:  self.wid_att7.setVisible(True)
+        if self.n_blocks >= 8:  self.wid_att8.setVisible(True)
+        if self.n_blocks >= 9:  self.wid_att9.setVisible(True)
+        if self.n_blocks >= 10: self.wid_att10.setVisible(True)
 
     def select_syned_file(self):
         self.le_syned_file_name.setText(oasysgui.selectFileFromDialog(self, self.syned_file_name, "Open json File"))
@@ -169,7 +209,7 @@ class OWBoxOfFilters(OWOpticalElement):
                     f = FilterWithDensity(name=item['name'],
                                           material=item['substance'],
                                           thickness=item['thickness'],
-                                          density=item['thickness'])
+                                          density=item['density'])
                     items.append(f)
 
             block_list.append(FilterBlock(filters_list=items))
@@ -225,29 +265,27 @@ class OWBoxOfFilters(OWOpticalElement):
                 combo.setItemText(i, new_input[i])
 
     def configure_blocks_from_syned_json(self, content):
-        if content.get_n() > 5:
-            raise Exception('Maximum of 5 blocks allowed.')
+        if content.get_n() > 10:
+            raise Exception('Maximum of 10 blocks allowed.')
         else:
             self.n_blocks = content.get_n()
 
         self.set_visibility()
 
         # update combo boxes
+        combos = [self.wid_att1_combo, self.wid_att2_combo, self.wid_att3_combo,
+                  self.wid_att4_combo, self.wid_att5_combo, self.wid_att6_combo,
+                  self.wid_att7_combo, self.wid_att8_combo, self.wid_att9_combo,
+                  self.wid_att10_combo]
         for i in range(content.get_n()):
             blc = content.get_item(i)
-            items = []
-            for j in range(blc.get_n()):
-                filter = blc.get_item(j)
-                items.append(filter.get_name())
-            if i == 0: self.update_combo(self.wid_att1_combo, items)
-            if i == 1: self.update_combo(self.wid_att2_combo, items)
-            if i == 2: self.update_combo(self.wid_att3_combo, items)
-            if i == 3: self.update_combo(self.wid_att4_combo, items)
-            if i == 4: self.update_combo(self.wid_att5_combo, items)
+            items = [blc.get_item(j).get_name() for j in range(blc.get_n())]
+            self.update_combo(combos[i], items)
 
     def get_optical_element(self):
         # fix typo in original: att3s -> att3
-        self.syned_filterbox.set_selection([self.att1, self.att2, self.att3, self.att4, self.att5])
+        self.syned_filterbox.set_selection([self.att1, self.att2, self.att3, self.att4, self.att5,
+                                            self.att6, self.att7, self.att8, self.att9, self.att10])
         return self.syned_filterbox
 
 add_widget_parameters_to_module(__name__)

@@ -9,7 +9,18 @@ from syned.syned_object import SynedObject
 from collections import OrderedDict
 
 class FilterBlock(SynedObject):
+    """A single attenuator block (axis): an ordered list of FilterWithDensity foils.
+
+    All foils in a block are physically stacked and inserted together as one unit.
+    """
+
     def __init__(self, filters_list=None):
+        """
+        Parameters
+        ----------
+        filters_list : list of FilterWithDensity, optional
+            Ordered list of foils that make up this block. Defaults to empty list.
+        """
         if filters_list is None:
             self._filters_list = []
         else:
@@ -23,14 +34,12 @@ class FilterBlock(SynedObject):
 
     # # overwrites the SynedObject method for dealing with list
     def to_dictionary(self):
-        """
-        Returns a dictionary with the object fields.
+        """Return an ordered dictionary representation of this block.
 
         Returns
         -------
         dict
-            A dictionary with the data.
-
+            Keys: CLASS_NAME, filters_list (list of filter dictionaries).
         """
         dict_to_save = OrderedDict()
         dict_to_save.update({"CLASS_NAME":self.__class__.__name__})
@@ -38,13 +47,77 @@ class FilterBlock(SynedObject):
         return dict_to_save
 
     def get_n(self):
+        """Return the number of foils in this block.
+
+        Returns
+        -------
+        int
+        """
         return len(self._filters_list)
 
     def get_item(self, index):
+        """Return the foil at the given index.
+
+        Parameters
+        ----------
+        index : int
+
+        Returns
+        -------
+        FilterWithDensity
+        """
         return self._filters_list[index]
 
+    def get_lists_materials_thicknesses_densities(self, cumulate=False):
+        """Return the materials, thicknesses and densities of all foils in this block.
+
+        Parameters
+        ----------
+        cumulate : bool, optional
+            If True, foils sharing the same material and density are merged by
+            summing their thicknesses, regardless of their position in the list.
+            Order of first appearance is preserved. Default is False.
+
+        Returns
+        -------
+        materials : list of str
+        thicknesses : list of float
+            Foil thicknesses in mm.
+        densities : list of float
+            Foil densities in g/cm³.
+        """
+        materials   = [f.get_material()  for f in self._filters_list]
+        thicknesses = [f.get_thickness() for f in self._filters_list]
+        densities   = [f.get_density()   for f in self._filters_list]
+        if cumulate:
+            seen = {}  # (material, density) -> index in output lists
+            cum_mat, cum_thick, cum_dens = [], [], []
+            for mat, thick, dens in zip(materials, thicknesses, densities):
+                key = (mat, dens)
+                if key in seen:
+                    cum_thick[seen[key]] += thick
+                else:
+                    seen[key] = len(cum_mat)
+                    cum_mat.append(mat)
+                    cum_thick.append(thick)
+                    cum_dens.append(dens)
+            return cum_mat, cum_thick, cum_dens
+        return materials, thicknesses, densities
+
 class FilterBox(SynedObject):
+    """A box of attenuator blocks (axes): an ordered list of FilterBlock objects.
+
+    Each block is an independent attenuator unit. The selection state records
+    which filter position is active in each block.
+    """
+
     def __init__(self, filter_blocks_list=None):
+        """
+        Parameters
+        ----------
+        filter_blocks_list : list of FilterBlock, optional
+            Ordered list of attenuator blocks. Defaults to empty list.
+        """
         if filter_blocks_list is None:
             self._filter_blocks_list = []
         else:
@@ -60,14 +133,12 @@ class FilterBox(SynedObject):
 
     # # overwrites the SynedObject method for dealing with list
     def to_dictionary(self):
-        """
-        Returns a dictionary with the object fields.
+        """Return an ordered dictionary representation of this box.
 
         Returns
         -------
         dict
-            A dictionary with the data.
-
+            Keys: CLASS_NAME, filter_blocks_list (list of block dictionaries).
         """
         dict_to_save = OrderedDict()
         dict_to_save.update({"CLASS_NAME":self.__class__.__name__})
@@ -75,16 +146,87 @@ class FilterBox(SynedObject):
         return dict_to_save
 
     def get_n(self):
+        """Return the number of blocks (axes) in this box.
+
+        Returns
+        -------
+        int
+        """
         return len(self._filter_blocks_list)
 
     def get_item(self, index):
+        """Return the FilterBlock at the given index.
+
+        Parameters
+        ----------
+        index : int
+
+        Returns
+        -------
+        FilterBlock
+        """
         return self._filter_blocks_list[index]
 
+    def get_lists_materials_thicknesses_densities(self, cumulate=False):
+        """Return the materials, thicknesses and densities of all foils across all blocks.
+
+        Parameters
+        ----------
+        cumulate : bool, optional
+            If True, foils sharing the same material and density are merged by
+            summing their thicknesses globally across all blocks, regardless of
+            their position. Order of first appearance is preserved. Default is False.
+
+        Returns
+        -------
+        materials : list of str
+        thicknesses : list of float
+            Foil thicknesses in mm.
+        densities : list of float
+            Foil densities in g/cm³.
+        """
+        materials, thicknesses, densities = [], [], []
+        for block in self._filter_blocks_list:
+            m, t, d = block.get_lists_materials_thicknesses_densities()
+            materials.extend(m)
+            thicknesses.extend(t)
+            densities.extend(d)
+        if cumulate:
+            seen = {}
+            cum_mat, cum_thick, cum_dens = [], [], []
+            for mat, thick, dens in zip(materials, thicknesses, densities):
+                key = (mat, dens)
+                if key in seen:
+                    cum_thick[seen[key]] += thick
+                else:
+                    seen[key] = len(cum_mat)
+                    cum_mat.append(mat)
+                    cum_thick.append(thick)
+                    cum_dens.append(dens)
+            return cum_mat, cum_thick, cum_dens
+        return materials, thicknesses, densities
+
     def get_selection(self):
+        """Return the current filter selection for each block.
+
+        Returns
+        -------
+        list of int
+            Index of the active filter in each block.
+        """
         return self.__selection
 
     def set_selection(self, selection):
-        self.__selection = selection
+        """Set the active filter index for each block.
+
+        The list is clipped to the number of blocks, so passing a longer list
+        (e.g. from a widget with more slots than loaded blocks) is safe.
+
+        Parameters
+        ----------
+        selection : list of int
+        """
+        self.__selection = selection[:self.get_n()]
 
 if __name__ == "__main__":
 
@@ -140,7 +282,7 @@ if __name__ == "__main__":
                 f = FilterWithDensity(name=item['name'],
                                       material=item['substance'],
                                       thickness=item['thickness'],
-                                      density=item['thickness'])
+                                      density=item['density'])
                 items.append(f)
 
             block_list.append(FilterBlock(filters_list=items))
@@ -154,10 +296,9 @@ if __name__ == "__main__":
     if 1:
         from syned.util.json_tools import load_from_json_file
         tmp = load_from_json_file("tmp.json",
-                                  exec_commands=[
-                                      "from orangecontrib.syned.util.filter_with_density import FilterWithDensity",
-                                      "from orangecontrib.syned.util.filter_block import FilterBlock, FilterBox",
-                                  ])
+                                  exec_commands=(
+                                      "from orangecontrib.syned.util.filter_with_density import FilterWithDensity\n"
+                                      "from orangecontrib.syned.util.filter_block import FilterBlock, FilterBox"))
 
         print(tmp.info())
 

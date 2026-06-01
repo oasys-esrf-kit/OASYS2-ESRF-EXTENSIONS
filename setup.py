@@ -87,7 +87,7 @@ SETUP_REQUIRES = (
                   )
 
 INSTALL_REQUIRES = (
-                    'oasys2>=0.0.19',
+                    'oasys2>=0.0.20',
                     'pandas',
                     'numba',
                     'oasys-barc4ro>=2024.11.13',
