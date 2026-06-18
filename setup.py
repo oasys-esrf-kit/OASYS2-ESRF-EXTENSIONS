@@ -91,6 +91,8 @@ INSTALL_REQUIRES = (
                     'pandas',
                     'numba',
                     'oasys-barc4ro>=2024.11.13',
+                    'barc4shadow>=2026.06.17',
+                    'barc4beams>=2026.06.17',
                     # 'spectrum-builder>=1.0.5',     # to be added in the future, now install manually
                     # 'accelerator-toolbox==0.6.1', # in stand-by, gives problems in windows
                     # 'crystalpy>=0.0.25',  # todo: remove?, base lib of oasys2
