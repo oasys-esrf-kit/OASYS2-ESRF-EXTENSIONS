@@ -13,16 +13,18 @@ from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 from xoppylib.power.xoppy_calc_power import xoppy_calc_power
 
-from orangecontrib.xoppy.widgets.gui.ow_xoppy_widget import XoppyWidget
+from orangecontrib.xoppy.widgets.gui.ow_xoppy_widget_dabax import XoppyWidgetDabax
 import json
 import orangecanvas.resources as resources
 
 import scipy.constants as codata
 
-import xraylib
+try: import xraylib
+except: pass
 from dabax.dabax_xraylib import DabaxXraylib
+from dabax.dabax_files import dabax_f1f2_files, dabax_crosssec_files
 
-class OWBM05Scintillators(XoppyWidget):
+class OWBM05Scintillators(XoppyWidgetDabax):
     name = "BM05_Scintillators"
     id = "orange.widgets.dataxpower"
     description = "Absorbed and Transmitted Power by Scintillators of BM05"
@@ -46,7 +48,8 @@ class OWBM05Scintillators(XoppyWidget):
     #PLOT_SETS = Setting(0)
     FILE_DUMP = 0
 
-    MATERIAL_CONSTANT_LIBRARY_FLAG = Setting(0)
+    # MATERIAL_CONSTANT_LIBRARY_FLAG and the DABAX_*_FILE_INDEX settings (plus the
+    # "Materials Library" tab) are inherited from XoppyWidgetDabax (as in xpower).
     file_json = os.path.join(resources.package_dirname("orangecontrib.esrf.xoppy"), 'data', 'bm05_scintillators.json')
     input_spectrum = None
     input_script = None
@@ -54,16 +57,24 @@ class OWBM05Scintillators(XoppyWidget):
 
     def __init__(self):
         super().__init__(show_script_tab=True)
-                     
+
+    def dabax_show_f1f2(self):
+        return True
+
+    def dabax_show_crosssec(self):
+        return True
 
     def build_gui(self):
-        self.get_scintillator_dic()         
+        self.get_scintillator_dic()
 
         self.left_side.setSizePolicy(QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding))
         self.left_side.setMaximumWidth(self.CONTROL_AREA_WIDTH + 20)
         self.left_side.updateGeometry()
 
-        box = oasysgui.widgetBox(self.controlArea, self.name + " Input Parameters", orientation="vertical", width=self.CONTROL_AREA_WIDTH-10)
+        tabs_setting = oasysgui.tabWidget(self.controlArea)
+        tabs_setting.setFixedWidth(self.CONTROL_AREA_WIDTH-5)
+        box = oasysgui.createTabPage(tabs_setting, self.name + " Input Parameters")
+        self.tab_dabax = oasysgui.createTabPage(tabs_setting, "Materials Library")
 
         idx = -1 
 
@@ -133,17 +144,6 @@ class OWBM05Scintillators(XoppyWidget):
         box1 = gui.widgetBox(box)
         gui.separator(box1, height=7)
 
-        gui.comboBox(box1, self, "MATERIAL_CONSTANT_LIBRARY_FLAG",
-                     label=self.unitLabels()[idx], addSpace=False,
-                    items=['Xraylib', 'DabaxXraylib'],
-                    valueType=int, orientation="horizontal", labelWidth=250, callback=self.set_EL_FLAG)
-        self.show_at(self.unitFlags()[idx], box1)
-
-        #widget index 14
-        idx += 1
-        box1 = gui.widgetBox(box)
-        gui.separator(box1, height=7)
-
         gui.comboBox(box1, self, "FILE_DUMP",
                      label=self.unitLabels()[idx], addSpace=False,
                     items=['No', 'Yes (power.spec)'],
@@ -183,8 +183,8 @@ class OWBM05Scintillators(XoppyWidget):
                  'To energy [eV]:',
                  'Energy points:  ',
                  'File with input beam spectral power:',
-                 self.get_axis_name(0), self.get_axis_name(1), self.get_axis_name(2),                                  
-                 'Material data library','Dump file']
+                 self.get_axis_name(0), self.get_axis_name(1), self.get_axis_name(2),
+                 'Dump file']
 
 
     def unitFlags(self):
@@ -194,7 +194,7 @@ class OWBM05Scintillators(XoppyWidget):
                  'self.SOURCE  ==  1',
                  'self.SOURCE  >  1',
                  'True','True','True',
-                 'True', 'True']
+                 'True']
 
     def get_help_name(self):
         return 'BM05_Scintillators'
@@ -414,8 +414,11 @@ class OWBM05Scintillators(XoppyWidget):
             material_constants_library = xraylib
             material_constants_library_str = "xraylib"
         else:
-            material_constants_library = DabaxXraylib()
-            material_constants_library_str = 'DabaxXraylib()'
+            material_constants_library = DabaxXraylib(file_f1f2=dabax_f1f2_files()[self.DABAX_F1F2_FILE_INDEX],
+                                                      file_CrossSec=dabax_crosssec_files()[self.DABAX_CROSSSEC_FILE_INDEX])
+            material_constants_library_str = 'DabaxXraylib(file_f1f2="%s",file_CrossSec="%s")' % \
+                                             (dabax_f1f2_files()[self.DABAX_F1F2_FILE_INDEX],
+                                              dabax_crosssec_files()[self.DABAX_CROSSSEC_FILE_INDEX])
             print(material_constants_library.info())
 
         out_dictionary = xoppy_calc_power(
