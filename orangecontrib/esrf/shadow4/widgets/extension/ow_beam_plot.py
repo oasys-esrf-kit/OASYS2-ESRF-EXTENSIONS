@@ -30,7 +30,7 @@ COLOR_MAPS = ["viridis", "plasma", "turbo", "magma", "terrain"]
 class OWBeamPlot(OWWidget):
     name = "Beam Plot"
     description = "Plot a barc4beams Beam"
-    icon = "icons/chart-scatter.png"
+    icon = "icons/uicons_chart-scatter.png"
     priority = 2
     keywords = ["barc", "barc4beams", "beam", "plot", "divergence", "phase space"]
 

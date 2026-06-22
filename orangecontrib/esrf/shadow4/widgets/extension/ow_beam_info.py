@@ -17,7 +17,7 @@ from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 class OWBeamInfo(OWWidget):
     name = "Beam Info"
     description = "Convert Shadow4 data to a barc4beams Beam and print statistics"
-    icon = "icons/info.png"
+    icon = "icons/uicons_info.png"
     priority = 1
     keywords = ["barc", "barc4beams", "beam", "statistics", "shadow4"]
 

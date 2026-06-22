@@ -19,7 +19,7 @@ from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 class OWBeamlineConfigs(OWWidget):
     name = "Beamline Configs"
     description = "Compare multiple SHADOW4 beamline layouts with barc4shadow"
-    icon = "icons/deep-learning.png"
+    icon = "icons/uicons_deep-learning.png"
     priority = 5
     keywords = ["barc", "barc4shadow", "beamline", "layout", "configs", "shadow4"]
 
