@@ -36,7 +36,7 @@ class OWCrystalpy(XoppyWidgetDabax):
     id = "orange.widgets.crystalpy"
     description = "Crystal Reflectivity (perfect)"
     icon = "icons/xoppy_xcrystal.png"
-    priority = 500
+    priority = 1
     category = ""
     keywords = ["xoppy", "xcrystal"]
 
