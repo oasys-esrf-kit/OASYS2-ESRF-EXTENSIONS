@@ -29,7 +29,7 @@ from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 class OWParallel(OWWidget):
     name = "Parallel"
     description = "Run additional Shadow4 beamline repetitions in parallel"
-    icon = "icons/processing.png"
+    icon = "icons/uicons_parallel.png"
     priority = 6
     keywords = ["barc", "shadow4", "parallel", "joblib", "repetitions", "seed"]
 

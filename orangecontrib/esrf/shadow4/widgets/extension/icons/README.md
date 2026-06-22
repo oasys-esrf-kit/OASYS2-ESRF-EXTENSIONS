@@ -1,1 +1,1 @@
-Uicons by FLATICON - www [dot] flaticon [dot] com
+Uicons by FLATICON - https://www.flaticon.com/uicons

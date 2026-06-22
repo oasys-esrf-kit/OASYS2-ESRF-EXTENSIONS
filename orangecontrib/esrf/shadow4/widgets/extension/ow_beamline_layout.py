@@ -19,7 +19,7 @@ from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 class OWBeamlineLayout(OWWidget):
     name = "Beamline Layout"
     description = "Plot a SHADOW4 beamline layout with barc4shadow"
-    icon = "icons/progress-bar-dotted-line-half.png"
+    icon = "icons/uicons_progress-bar-dotted-line-half.png"
     priority = 4
     keywords = ["barc", "barc4shadow", "beamline", "layout", "shadow4"]
 
