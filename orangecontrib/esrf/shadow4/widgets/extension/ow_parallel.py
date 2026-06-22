@@ -15,7 +15,7 @@ from oasys2.widget import gui as oasysgui
 from oasys2.widget.gui import MessageDialog, Styles
 from oasys2.widget.widget import OWWidget
 
-from orangecontrib.barc.shadow4.util.parallel import (
+from orangecontrib.esrf.shadow4.util.parallel import (
     concatenate_shadow_data,
     cpu_info_text,
     load_runner_module,
