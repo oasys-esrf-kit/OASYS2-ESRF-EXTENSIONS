@@ -1,9 +1,11 @@
-NAME = "Wofry \u23F5 ESRF Extension"
+# Category description for the widget registry
 
-DESCRIPTION = "ESRF Widgets for Wofry"
+NAME = "Wofry ESRF Extension"
 
-BACKGROUND =  "#E6E6E6"
+DESCRIPTION = "Widgets for Wofry"
+
+BACKGROUND = "#ada8a8"
 
 ICON = "icons/esrf2.png"
 
-PRIORITY = 5.9
+PRIORITY = 5.999
