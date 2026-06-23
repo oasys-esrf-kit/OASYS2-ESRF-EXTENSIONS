@@ -23,7 +23,7 @@ from syned.beamline.beamline import Beamline
 from syned.beamline.element_coordinates import ElementCoordinates
 from syned.beamline.beamline_element import BeamlineElement
 
-from syned.util.json_tools import load_from_json_file, load_from_json_url
+from syned.util.json_tools import load_from_json_file, load_from_json_url, load_from_json_text
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
@@ -51,10 +51,23 @@ class OWBoxOfFilters(OWOpticalElement):
 
     syned_send_selection = Setting(0)
 
+    # serialized copy of the loaded FilterBox, persisted in the .ows workspace
+    # (combo items and self.syned_filterbox are otherwise rebuilt only on file read)
+    syned_filterbox_json = Setting("")
+
     syned_filterbox = FilterBox()
 
     def __init__(self):
         super().__init__(allow_angle_radial=False, allow_angle_azimuthal=False)
+
+        # restore the FilterBox saved in the workspace (.ows), if any, without
+        # overwriting the restored att1..att10 selections
+        if self.syned_filterbox_json:
+            try:
+                self.syned_filterbox = load_from_json_text(self.syned_filterbox_json)
+                self.restore_blocks_from_filterbox()
+            except Exception:
+                pass
 
     def draw_specific_box(self):
 
@@ -202,6 +215,7 @@ class OWBoxOfFilters(OWOpticalElement):
                 if isinstance(content, FilterBox):
                     self.configure_blocks_from_syned_json(content)
                     self.syned_filterbox = content
+                    self.syned_filterbox_json = content.to_json()  # persist in workspace
                 else:
                     raise Exception("json file must contain a SYNED FilterBox")
             except Exception as e:
@@ -233,6 +247,7 @@ class OWBoxOfFilters(OWOpticalElement):
                     fb_syned = FilterBox.from_plane_json_dict(att_dic)
                     self.configure_blocks_from_syned_json(fb_syned)
                     self.syned_filterbox = fb_syned
+                    self.syned_filterbox_json = fb_syned.to_json()  # persist in workspace
                 else:
                     raise Exception("json file must contain a FilterBox")
             except Exception as e:
@@ -283,6 +298,31 @@ class OWBoxOfFilters(OWOpticalElement):
             elif selection >= len(items): selection = max(0, len(items) - 1)
             setattr(self, atts[i], selection)   # updates the bound setting (read by get_optical_element)
             combos[i].setCurrentIndex(selection)  # ensure the combo display matches
+
+    def restore_blocks_from_filterbox(self):
+        # repopulate combos from self.syned_filterbox on workspace restore, KEEPING
+        # the restored att1..att10 selections (unlike configure_blocks_from_syned_json,
+        # which resets them to each block's stored selection / "_att_pos")
+        content = self.syned_filterbox
+        if content is None or content.get_n() == 0: return
+
+        self.set_visibility()  # honour the restored n_blocks
+
+        combos = [self.wid_att1_combo, self.wid_att2_combo, self.wid_att3_combo,
+                  self.wid_att4_combo, self.wid_att5_combo, self.wid_att6_combo,
+                  self.wid_att7_combo, self.wid_att8_combo, self.wid_att9_combo,
+                  self.wid_att10_combo]
+        atts = ["att1", "att2", "att3", "att4", "att5",
+                "att6", "att7", "att8", "att9", "att10"]
+        for i in range(min(content.get_n(), 10)):
+            blc = content.get_item(i)
+            items = [blc.get_item(j).get_name() for j in range(blc.get_n())]
+            self.update_combo(combos[i], items)
+            sel = getattr(self, atts[i])  # the value restored from the .ows
+            if sel < 0:             sel = 0
+            elif sel >= len(items): sel = max(0, len(items) - 1)
+            setattr(self, atts[i], sel)
+            combos[i].setCurrentIndex(sel)
 
     def get_optical_element(self):
         filterbox = self.syned_filterbox.duplicate()
