@@ -1,0 +1,13 @@
+{
+    "SCINTILLATOR": {
+        "_name": "Scintillator",
+        "_att_pos": 2,
+        "filter1": {"name": "Diamond", "substance": "C",         "thickness": 0.5,  "density": 3.508},
+        "filter2": {"name": "Gadox",   "substance": "Gd2O2S",    "thickness": 0.5,  "density": 3.66},
+        "filter3": {"name": "LuAg",    "substance": "Al5Lu3O12", "thickness": 0.5,  "density": 6.76},
+        "filter4": {"name": "GGG",     "substance": "Gd3Ga5O12", "thickness": 0.5,  "density": 7.08},
+        "filter5": {"name": "LSO",     "substance": "Lu2SiO5",   "thickness": 0.5,  "density": 7.4},
+        "filter6": {"name": "YAG",     "substance": "Y3Al5O12",  "thickness": 0.5,  "density": 4.55},
+        "filter7": {"name": "CWO",     "substance": "CdWO4",     "thickness": 0.5,  "density": 7.9}
+    }
+}

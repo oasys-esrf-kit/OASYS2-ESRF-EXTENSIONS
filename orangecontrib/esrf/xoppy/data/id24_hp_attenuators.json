@@ -1,0 +1,51 @@
+{
+    "Axis1": {
+        "_name": "Axis1",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 1)",        "substance": "C",  "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "Diam 0.3 mm", "substance": "C",  "thickness": 0.3, "density": 3.52},
+        "filter3": {"name": "PyroC 3 mm",  "substance": "C",  "thickness": 3.0, "density": 1.40},
+        "filter4": {"name": "Diam 0.3 mm", "substance": "C",  "thickness": 0.3, "density": 3.52}
+    },
+    "Axis2a": {
+        "_name": "Axis2 (foil 1)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 2a)",       "substance": "C",  "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "Al 0.5 mm",  "substance": "Al", "thickness": 0.5, "density": 2.7},
+        "filter3": {"name": "PyroC 1 mm", "substance": "C",  "thickness": 0.5, "density": 1.4}
+    },
+    "Axis2b": {
+        "_name": "Axis2 (foil 2)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 2b)",             "substance": "C", "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "PyroC 0.5 mm",     "substance": "C", "thickness": 0.5, "density": 1.4},
+        "filter3": {"name": "BlackDiam 0.5 mm", "substance": "C", "thickness": 0.5, "density": 3.5}
+    },
+    "Axis2c": {
+        "_name": "Axis2 (foil 3)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 2c)",             "substance": "C", "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "PyroC 2.0 mm",     "substance": "C", "thickness": 2.0, "density": 1.4},
+        "filter3": {"name": "PyroC 0.5 mm",     "substance": "C", "thickness": 0.5, "density": 1.4}
+    },
+    "Axis3a": {
+        "_name": "Axis3 (foil 1)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 3a)",         "substance": "C",  "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "Al 1 mm",      "substance": "Al", "thickness": 1.0, "density": 2.7},
+        "filter3": {"name": "PyroC 0.5 mm", "substance": "C",  "thickness": 0.5, "density": 1.4}
+    },
+    "Axis3b": {
+        "_name": "Axis3 (foil 2)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 3b)",             "substance": "C", "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "PyroC 0.5 mm",     "substance": "C", "thickness": 0.5, "density": 1.4},
+        "filter3": {"name": "BlackDiam 0.5 mm", "substance": "C", "thickness": 0.5, "density": 3.5}
+    },
+    "Axis3c": {
+        "_name": "Axis3 (foil 3)",
+        "_att_pos": 0,
+        "filter1": {"name": "None (axis 3c)",             "substance": "C", "thickness": 0.0, "density": 3.52},
+        "filter2": {"name": "PyroC 3.0 mm",     "substance": "C", "thickness": 3.0, "density": 1.4}
+    }
+}

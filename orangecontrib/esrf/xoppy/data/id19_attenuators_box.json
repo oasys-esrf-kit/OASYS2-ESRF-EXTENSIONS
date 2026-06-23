@@ -1,0 +1,82 @@
+{
+    "ATT11": {
+        "_name": "Att11",
+        "_att_pos": 0,
+        "filter1": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508},
+        "filter2": {"name": "102 : Diam, 1.4mm", "substance": "C", "thickness": 1.4, "density": 3.508},
+        "filter3": {"name": "103 : Diam, 2.8mm", "substance": "C", "thickness": 2.8, "density": 3.508},
+        "filter4": {"name": "104 : Diam, 1mm",   "substance": "C", "thickness": 1.0, "density": 3.508}
+    },
+    "ATT12": {
+        "_name": "Att12",
+        "_att_pos": 3,
+        "filter1": {"name": "201 : Al, 0.7mm", "substance": "Al", "thickness": 0.7, "density": 2.7},
+        "filter2": {"name": "202 : Al, 1.4mm", "substance": "Al", "thickness": 1.4, "density": 2.7},
+        "filter3": {"name": "203 : Al, 2.8mm", "substance": "Al", "thickness": 2.8, "density": 2.7},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT13": {
+        "_name": "Att13",
+        "_att_pos": 3,
+        "filter1": {"name": "301 : Cu, 4mm", "substance": "Cu", "thickness": 4.0, "density": 8.96},
+        "filter2": {"name": "302 : Cu, 6mm", "substance": "Cu", "thickness": 6.0, "density": 8.96},
+        "filter3": {"name": "303 : Cu, 8mm", "substance": "Cu", "thickness": 8.0, "density": 8.96},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT14": {
+        "_name": "Att14",
+        "_att_pos": 3,
+        "filter1": {"name": "401 : Al, 0.7mm", "substance": "Al", "thickness": 0.7, "density": 2.7},
+        "filter2": {"name": "402 : Al, 1.4mm", "substance": "Al", "thickness": 1.4, "density": 2.7},
+        "filter3": {"name": "403 : Al, 2.8mm", "substance": "Al", "thickness": 2.8, "density": 2.7},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT15": {
+        "_name": "Att15",
+        "_att_pos": 3,
+        "filter1": {"name": "501 : Cu, 0.14mm", "substance": "Cu", "thickness": 0.14, "density": 8.96},
+        "filter2": {"name": "502 : Cu, 0.35mm", "substance": "Cu", "thickness": 0.35, "density": 8.96},
+        "filter3": {"name": "503 : Cu, 1.4mm",  "substance": "Cu", "thickness": 1.4,  "density": 8.96},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT21": {
+        "_name": "Att21",
+        "_att_pos": 3,
+        "filter1": {"name": "601 : Cu, 0.7mm", "substance": "Cu", "thickness": 0.7, "density": 8.96},
+        "filter2": {"name": "602 : Cu, 1.4mm", "substance": "Cu", "thickness": 1.4, "density": 8.96},
+        "filter3": {"name": "603 : Cu, 2.8mm", "substance": "Cu", "thickness": 2.8, "density": 8.96},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT22": {
+        "_name": "Att22",
+        "_att_pos": 3,
+        "filter1": {"name": "701 : Mo, 0.14mm", "substance": "Mo", "thickness": 0.14, "density": 10.20},
+        "filter2": {"name": "702 : Mo, 0.35mm", "substance": "Mo", "thickness": 0.35, "density": 10.20},
+        "filter3": {"name": "703 : Mo, 0.7mm",  "substance": "Mo", "thickness": 0.7,  "density": 10.20},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT23": {
+        "_name": "Att23",
+        "_att_pos": 3,
+        "filter1": {"name": "801 : W, 0.3mm", "substance": "W", "thickness": 0.3, "density": 19.3},
+        "filter2": {"name": "802 : W, 0.5mm", "substance": "W", "thickness": 0.5, "density": 19.3},
+        "filter3": {"name": "803 : W, 1.0mm", "substance": "W", "thickness": 1.0, "density": 19.3},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT24": {
+        "_name": "Att24",
+        "_att_pos": 3,
+        "filter1": {"name": "901 : W, 0.07mm", "substance": "W", "thickness": 0.07, "density": 19.3},
+        "filter2": {"name": "902 : W, 0.14mm", "substance": "W", "thickness": 0.14, "density": 19.3},
+        "filter3": {"name": "903 : W, 0.28mm", "substance": "W", "thickness": 0.28, "density": 19.3},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    },
+    "ATT25": {
+        "_name": "Att25",
+        "_att_pos": 3,
+        "filter1": {"name": "1001 : Au, 0.07mm", "substance": "Au", "thickness": 0.07, "density": 19.3},
+        "filter2": {"name": "1002 : Au, 0.14mm", "substance": "Au", "thickness": 0.14, "density": 19.3},
+        "filter3": {"name": "1003 : Au, 0.28mm", "substance": "Au", "thickness": 0.28, "density": 19.3},
+        "filter4": {"name": "None",        "substance": "C", "thickness": 0.0, "density": 3.508}
+    }
+}
