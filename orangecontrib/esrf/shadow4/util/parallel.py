@@ -11,6 +11,16 @@ import textwrap
 import joblib
 from shadow4.beamline.s4_beamline import S4Beamline
 from shadow4.sources.s4_light_source_from_beamlines import S4LightSourceFromBeamlines
+from shadow4.sources.source_geometrical.source_grid_cartesian import SourceGridCartesian
+from shadow4.sources.source_geometrical.source_grid_polar import SourceGridPolar
+
+
+UNSUPPORTED_PARALLEL_SOURCE_MESSAGE = (
+    "SourceGridCartesian and SourceGridPolar are deterministic grid sources "
+    "and do not support parallel repetitions in this widget. They do not expose "
+    "a usable Monte Carlo seed, so parallel calculation cannot generate "
+    "independent runs."
+)
 
 
 def cpu_info_text():
@@ -79,7 +89,18 @@ def concatenate_shadow_data(beamline, beam_list, footprint_list, seed_list, verb
     return beamline_acc, beam_acc, footprint_acc
 
 
+def validate_parallel_beamline(beamline):
+    prototype_beamline, _ = _get_parallel_runner_prototype(beamline)
+    light_source = prototype_beamline.get_light_source()
+
+    if isinstance(light_source, (SourceGridCartesian, SourceGridPolar)):
+        raise ValueError(UNSUPPORTED_PARALLEL_SOURCE_MESSAGE)
+
+    return prototype_beamline
+
+
 def make_runner_module_from_s4beamline(beamline, module_path=None, verbose=False):
+    validate_parallel_beamline(beamline)
     code_text = beamline.to_python_code()
     light_source = beamline.get_light_source()
     default_seed = int(light_source.get_seed())
@@ -155,6 +176,7 @@ def make_parallel_runner_module_from_s4beamline(
         )
 
     prototype_beamline, number_of_repetitions_from_beamline = _get_parallel_runner_prototype(beamline)
+    validate_parallel_beamline(prototype_beamline)
     code_text = prototype_beamline.to_python_code()
     light_source = prototype_beamline.get_light_source()
     default_seed = int(light_source.get_seed())

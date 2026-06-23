@@ -24,6 +24,7 @@ from orangecontrib.esrf.shadow4.util.parallel import (
     make_runner_module_from_s4beamline,
     print_cpu_info,
     seed_for_iteration,
+    validate_parallel_beamline,
 )
 from orangecontrib.shadow4.util.python_script import PythonScript
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
@@ -324,6 +325,7 @@ class OWParallel(OWWidget):
             raise ValueError("Shadow Data does not contain an S4 beamline.")
         if self._shadow_data.beamline.get_light_source() is None:
             raise ValueError("Shadow Data beamline does not contain a light source.")
+        validate_parallel_beamline(self._shadow_data.beamline)
         if not str(self.runner_script_file_name).strip():
             raise ValueError("Runner script file name is empty.")
 
