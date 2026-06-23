@@ -2,6 +2,7 @@ from copy import deepcopy
 import contextlib
 import io
 import os
+import pathlib
 import time
 
 import joblib
@@ -19,10 +20,12 @@ from orangecontrib.esrf.shadow4.util.parallel import (
     concatenate_shadow_data,
     cpu_info_text,
     load_runner_module,
+    make_parallel_runner_module_from_s4beamline,
     make_runner_module_from_s4beamline,
     print_cpu_info,
     seed_for_iteration,
 )
+from orangecontrib.shadow4.util.python_script import PythonScript
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 
 
@@ -44,7 +47,7 @@ class OWParallel(OWWidget):
     number_of_repetitions = Setting(5)
     number_of_rays = Setting(10000)
     n_jobs = Setting(-1)
-    runner_script_file_name = Setting("parallel_runner_from_oasys.py")
+    runner_script_file_name = Setting("runner_from_oasys.py")
 
     def __init__(self):
         super().__init__()
@@ -76,6 +79,7 @@ class OWParallel(OWWidget):
             labelWidth=190,
             valueType=int,
             orientation="horizontal",
+            callback=self.set_script,
         )
         self.le_number_of_rays = oasysgui.lineEdit(
             settings_box,
@@ -85,6 +89,7 @@ class OWParallel(OWWidget):
             labelWidth=190,
             valueType=int,
             orientation="horizontal",
+            callback=self.set_script,
         )
         oasysgui.lineEdit(
             settings_box,
@@ -94,6 +99,7 @@ class OWParallel(OWWidget):
             labelWidth=190,
             valueType=int,
             orientation="horizontal",
+            callback=self.set_script,
         )
 
         file_box = oasysgui.widgetBox(
@@ -133,14 +139,31 @@ class OWParallel(OWWidget):
         # gui.label(info_box, self, "All repetitions are recalculated from the input beamline.")
         # gui.label(info_box, self, "Number of rays is pre-filled from the input light source.")
 
+        self.main_tabs = oasysgui.tabWidget(self.mainArea)
+        out_tab = oasysgui.createTabPage(self.main_tabs, "Output")
+        script_tab = oasysgui.createTabPage(self.main_tabs, "Script")
+
         self.run_output = oasysgui.textArea(height=560, width=760)
         output_box = gui.widgetBox(
-            self.mainArea,
+            out_tab,
             "Parallel run log",
             addSpace=True,
             orientation="horizontal",
         )
         output_box.layout().addWidget(self.run_output)
+
+        self.shadow4_script = PythonScript()
+        self.shadow4_script.code_area.setFixedHeight(400)
+        self.shadow4_script.console.locals["__name__"] = "__main__"
+
+        script_box = gui.widgetBox(
+            script_tab,
+            "Python script",
+            addSpace=True,
+            orientation="horizontal",
+        )
+        script_box.layout().addWidget(self.shadow4_script)
+        self.set_script()
 
         gui.rubber(self.controlArea)
 
@@ -148,13 +171,41 @@ class OWParallel(OWWidget):
     def set_shadow_data(self, shadow_data):
         self._shadow_data = shadow_data
         self._prefill_number_of_rays()
+        self.set_script()
+
+    def set_script(self):
+        if not hasattr(self, "shadow4_script"):
+            return
+
+        if self._shadow_data is None or self._shadow_data.beamline is None:
+            self.shadow4_script.set_code("# No Shadow Data input received.")
+            return
+
+        try:
+            runner_path = make_parallel_runner_module_from_s4beamline(
+                deepcopy(self._shadow_data.beamline),
+                number_of_repetitions=int(self.number_of_repetitions),
+                number_of_rays=int(self.number_of_rays),
+                n_jobs=int(self.n_jobs),
+                output_file="s4_beam.h5",
+            )
+            runner_path = pathlib.Path(runner_path)
+            self.shadow4_script.set_code(runner_path.read_text(encoding="utf-8"))
+            try:
+                runner_path.unlink()
+            except Exception:
+                pass
+        except Exception as exception:
+            self.shadow4_script.set_code(
+                "Problem in writing python script:\n%s" % str(exception)
+            )
 
     def select_runner_script_file(self):
         self.le_runner_script_file_name.setText(
             oasysgui.selectSaveFileFromDialog(
                 self,
                 self.runner_script_file_name,
-                default_file_name="parallel_runner_from_oasys.py",
+                default_file_name="runner_from_oasys.py",
                 file_extension_filter="Python Files (*.py)",
             )
         )
