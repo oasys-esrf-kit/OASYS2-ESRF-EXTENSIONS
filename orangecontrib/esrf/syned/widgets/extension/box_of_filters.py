@@ -1,4 +1,5 @@
 import os
+import numpy
 import sys
 import json
 import urllib.request
@@ -18,6 +19,9 @@ from orangecontrib.syned.widgets.gui.ow_optical_element import OWOpticalElement
 from syned.beamline.optical_elements.absorbers.filter_with_density import FilterWithDensity
 from syned.beamline.optical_elements.absorbers.filter_block import FilterBlock
 from syned.beamline.optical_elements.absorbers.filter_box import FilterBox
+from syned.beamline.beamline import Beamline
+from syned.beamline.element_coordinates import ElementCoordinates
+from syned.beamline.beamline_element import BeamlineElement
 
 from syned.util.json_tools import load_from_json_file, load_from_json_url
 
@@ -44,6 +48,8 @@ class OWBoxOfFilters(OWOpticalElement):
     n_blocks = Setting(3)
     syned_file_name = Setting("https://raw.githubusercontent.com/oasys-esrf-kit/OASYS1-ESRF-Extensions/master/orangecontrib/esrf/xoppy/data/bm05_wb_attenuators.json")
     # syned_file_name = Setting("/home/srio/OASYS2.0/modelling_team_scripts_and_workspaces/id11/WATTDOG/SPECTRA/id11_wattdog_attenuators_2028_syned_no_density.json")
+
+    syned_send_selection = Setting(0)
 
     syned_filterbox = FilterBox()
 
@@ -72,6 +78,15 @@ class OWBoxOfFilters(OWOpticalElement):
 
         button = gui.button(button_box, self, "Write Syned File...", callback=self.write_syned_file)
         button.setFixedHeight(25)
+
+        #################
+        box_send = oasysgui.widgetBox(self.tab_bas, "send object", addSpace=True, orientation="vertical")
+
+        gui.comboBox(box_send, self, "syned_send_selection",
+                     label="Send syned object with:",
+                     items=['All filters','Selected filters'],
+                     orientation="horizontal", labelWidth=250, editable=0)
+
 
         ################
         filter_box = oasysgui.widgetBox(self.tab_bas, "Box of Filters Setting", addSpace=True, orientation="vertical")
@@ -133,6 +148,7 @@ class OWBoxOfFilters(OWOpticalElement):
                                             items=['Undefined'],
                                             orientation="horizontal", labelWidth=150, editable=1)
 
+
         self.set_visibility()
 
     def set_n_blocks(self):
@@ -192,34 +208,6 @@ class OWBoxOfFilters(OWOpticalElement):
                 raise Exception("Error reading SYNED FilterBox from file: " + str(e))
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e.args[0]), QMessageBox.StandardButton.Ok)
-
-    # def _att_dic_to_syned_filterbox(self, att_dic):
-    #     n_keys = 0
-    #     keys = []
-    #     for key in att_dic.keys():
-    #         n_keys += 1
-    #         keys.append(key)
-    #
-    #     # update combo boxes
-    #     block_list = []
-    #     for i in range(n_keys):
-    #         items = []
-    #         selection = 0
-    #         for filter in att_dic[keys[i]].keys():
-    #             if filter == "_att_pos":
-    #                 selection =  att_dic[keys[i]][filter]
-    #
-    #             if filter[0] != "_":
-    #                 item = att_dic[keys[i]][filter]
-    #                 f = FilterWithDensity(name=item['name'],
-    #                                       material=item['substance'],
-    #                                       thickness=item['thickness'],
-    #                                       density=item['density'])
-    #                 items.append(f)
-    #
-    #         block_list.append(FilterBlock(filters_list=items, selection=selection))
-    #
-    #     return FilterBox(filter_blocks_list=block_list)
 
     def read_plane_json_file(self):
         try:
@@ -304,6 +292,37 @@ class OWBoxOfFilters(OWOpticalElement):
         for i in range(self.n_blocks):
             filterbox.get_item(i).set_selection(ss[i])
         return filterbox
+
+    def send_data(self): # overwrite this method to allow sending syned object with selection only
+        try:
+            self.check_data()
+
+            if self.beamline is None: self.beamline = Beamline()
+
+
+            if self.syned_send_selection:
+                optical_element = self.get_optical_element().duplicate_using_selected_only()
+            else:
+                optical_element = self.get_optical_element()
+
+            beamline_element = BeamlineElement(optical_element=optical_element,
+                                               coordinates=ElementCoordinates(p=self.p,
+                                                                              q=self.q,
+                                                                              angle_radial=numpy.radians(self.angle_radial),
+                                                                              angle_azimuthal=numpy.radians(self.angle_azimuthal)))
+
+            output_beamline = self.beamline.duplicate()
+            output_beamline.append_beamline_element(beamline_element=beamline_element)
+
+            self.Outputs.syned_data.send(output_beamline)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e.args[0]), QMessageBox.Ok)
+
+            self.setStatusMessage("")
+            self.progressBarFinished()
+
+            if self.IS_DEVELOP: raise e
 
 add_widget_parameters_to_module(__name__)
 
