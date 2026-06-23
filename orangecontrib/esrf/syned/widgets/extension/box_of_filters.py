@@ -283,10 +283,18 @@ class OWBoxOfFilters(OWOpticalElement):
                   self.wid_att4_combo, self.wid_att5_combo, self.wid_att6_combo,
                   self.wid_att7_combo, self.wid_att8_combo, self.wid_att9_combo,
                   self.wid_att10_combo]
+        atts = ["att1", "att2", "att3", "att4", "att5",
+                "att6", "att7", "att8", "att9", "att10"]
         for i in range(content.get_n()):
             blc = content.get_item(i)
             items = [blc.get_item(j).get_name() for j in range(blc.get_n())]
             self.update_combo(combos[i], items)
+            # activate the selection stored in the block (e.g. "_att_pos")
+            selection = blc.get_selection()
+            if selection < 0:            selection = 0
+            elif selection >= len(items): selection = max(0, len(items) - 1)
+            setattr(self, atts[i], selection)   # updates the bound setting (read by get_optical_element)
+            combos[i].setCurrentIndex(selection)  # ensure the combo display matches
 
     def get_optical_element(self):
         filterbox = self.syned_filterbox.duplicate()
