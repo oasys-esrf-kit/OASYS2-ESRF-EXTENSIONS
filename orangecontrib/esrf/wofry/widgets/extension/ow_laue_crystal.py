@@ -46,8 +46,10 @@ class WOLaueCrystal1D(Crystal, OpticalElementDecorator):
                  npoints_x=100,
                  a_factor=1.0,
                  use_fast_hyp1f1=0,
+                 apply_absorption=True,  # FEATURE (2026): pass-through; False reproduces paper2013.py (attsym=1)
+                 chih2=None,  # FEATURE (2026): pass-through; if not None, overrides the computed chi_h*chi_hbar
                  source_flag=1,
-                 verbose=1,
+                 verbose=0,
                  ):
         Crystal.__init__(self,
                          name,
@@ -70,7 +72,9 @@ class WOLaueCrystal1D(Crystal, OpticalElementDecorator):
             alfa_deg=alfa_deg,  # CAN BE POSITIVE OR NEGATIVE)
             integration_points=integration_points,
             use_fast_hyp1f1=use_fast_hyp1f1,
-            verbose=1,
+            apply_absorption=apply_absorption,  # FEATURE (2026)
+            chih2=chih2,  # FEATURE (2026)
+            verbose=0,
         )
         if verbose: print(self._LaueCrystalFocusing.info())
 

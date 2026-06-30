@@ -2,6 +2,34 @@
 # **Focusing with Laue crystal** Theory and equations from:
 # Guigay and Ferrero "Dynamical focusing by bent Laue crystals" Acta Cryst. (2016). A72, 489–499
 #
+"""
+Semi-analytical crystal propagator for a cylindrically bent Laue crystal.
+
+This module computes the Bragg-reflected wavefield downstream of a flat or
+cylindrically bent perfect crystal in Laue (transmission) geometry, following
+the dynamical-theory (Takagi-Taupin) solutions of:
+
+  * Guigay, Ferrero et al., Acta Cryst. (2013) A69, 91-97   (symmetric case),
+  * Guigay & Ferrero,       Acta Cryst. (2016) A72, 489-499 (asymmetric case).
+
+The diffracted amplitude on the exit surface is obtained from an influence
+function (the crystal propagator): a Bessel function J0 in the symmetric case
+(asymmetry angle alfa = 0) and a confluent hypergeometric / Kummer function
+M(i*beta, 1, i*y) in the asymmetric case. The field at any downstream distance
+q is then obtained by Fresnel propagation, which for a point source at distance
+p reduces to the single-integral expressions of GF2016 (eqs. 23, 24, 30, 31).
+
+Conventions and units
+---------------------
+* All lengths are in millimetres (R, thickness, p, q), angles in radians
+  internally (alfa is given in degrees), photon energy in keV.
+* x is the transverse coordinate (mm) on the observation plane; q = 0 is the
+  exit surface, perpendicular to the Bragg-diffracted direction.
+* Two absorption mechanisms are present: the *anomalous* (Borrmann) absorption,
+  always included through the complex parameters Z and omega, and the *normal*
+  (photoelectric) absorption factor att = exp(-k*(t1+t2)/2*Im(chi0)), which can
+  be switched off with apply_absorption=False (to reproduce paper2013.py).
+"""
 
 import numpy
 import mpmath
@@ -18,7 +46,25 @@ from wofry.propagator.wavefront1D.generic_wavefront import GenericWavefront1D
 
 
 def hyp1f1_series_small(a, b, z, terms=20):
-    """Series expansion for small |z|"""
+    """
+    Confluent hypergeometric (Kummer) function M(a, b, z) by its power series,
+    accurate for small |z|.
+
+    Parameters
+    ----------
+    a, b : complex
+        Kummer parameters (here a = i*beta, b = 1).
+    z : complex
+        Argument (here z = i*yprime).
+    terms : int, optional
+        Maximum number of series terms; the sum stops early once a term falls
+        below 1e-15 in magnitude. Default 20.
+
+    Returns
+    -------
+    complex
+        The value of M(a, b, z).
+    """
     result = 1.0
     term = 1.0
     for k in range(1, terms):
@@ -30,7 +76,26 @@ def hyp1f1_series_small(a, b, z, terms=20):
 
 def fast_hyp1f1(kap, yprime):
     """
-    Fast replacement for mpmath.hyp1f1(1j*kap, 1, 1j*yprime)
+    Fast evaluation of the Kummer function M(i*kap, 1, i*yprime).
+
+    Chooses the cheapest accurate method for the magnitude of the argument:
+    a first-order expansion for |yprime| < 1e-8, the power series
+    (:func:`hyp1f1_series_small`) for |yprime| < 5, the large-argument
+    asymptotic form for |yprime| > 100, and ``mpmath.hyp1f1`` in between. It is
+    a drop-in replacement for ``mpmath.hyp1f1(1j*kap, 1, 1j*yprime)`` used when
+    ``use_fast_hyp1f1`` is enabled.
+
+    Parameters
+    ----------
+    kap : float
+        Real Kummer parameter beta = Omega / A.
+    yprime : float
+        Real argument y' = A*gamma*(a^2 - v^2)/sin^2(2 theta_B).
+
+    Returns
+    -------
+    complex
+        The value of M(i*kap, 1, i*yprime).
     """
     yp_abs = abs(yprime)
 
@@ -51,6 +116,16 @@ def fast_hyp1f1(kap, yprime):
         return mpmath.hyp1f1(1j * kap, 1, 1j * yprime)
 
 class LaueCrystalFocusing():
+    """
+    Crystal propagator for a flat or cylindrically bent Laue crystal.
+
+    Holds the crystal/geometry parameters and provides scans of the
+    Bragg-reflected wavefield: transverse profiles at a fixed distance
+    (:meth:`xscan` and its variants) and the on-axis intensity versus distance
+    (:meth:`qscan`). The symmetric case (``alfa_deg == 0``) is evaluated with the
+    Bessel-function influence function; the asymmetric case uses the Kummer
+    function. See the module docstring for theory, conventions and units.
+    """
     def __init__(self,
                  crystal_descriptor="Si",
                  hkl=[1, 1, 1],
@@ -62,8 +137,49 @@ class LaueCrystalFocusing():
                  alfa_deg=2.0,  # CAN BE POSITIVE OR NEGATIVE)
                  integration_points=500,
                  use_fast_hyp1f1=0,
+                 apply_absorption=True,
+                 chih2=None,
                  verbose=1,
                  ):
+            """
+            Parameters
+            ----------
+            crystal_descriptor : str
+                Crystal material name understood by xraylib (e.g. "Si").
+            hkl : list of int
+                Miller indices [h, k, l] of the reflection.
+            R : float
+                Radius of curvature in mm (positive: source faces the convex
+                side, per GF2016). Use a large value for a flat crystal.
+            poisson_ratio : float
+                Poisson ratio nu of the (isotropic) crystal; enters rho=nu/(1-nu).
+            photon_energy_in_keV : float
+                Photon energy in keV.
+            thickness : float
+                Crystal thickness t in mm (normal to the surface).
+            p : float
+                Source-to-crystal distance in mm (p = 0: point source on the
+                entrance surface).
+            alfa_deg : float
+                Asymmetry angle in degrees (0 = symmetric; may be + or -).
+            integration_points : int
+                Number of points used to evaluate the propagator integrals.
+            use_fast_hyp1f1 : int
+                If truthy, use :func:`fast_hyp1f1` instead of ``mpmath.hyp1f1``
+                for the Kummer function (asymmetric case only).
+            apply_absorption : bool
+                If True (default) include the normal (photoelectric) absorption
+                factor att = exp(-k*(t1+t2)/2*Im(chi0)). If False, set att = 1
+                to reproduce paper2013.py. Anomalous (Borrmann) absorption is
+                always included via the complex Z and omega.
+            chih2 : complex or None
+                If not None, override the computed chi_h*chi_hbar with this value
+                (used to reproduce the exact susceptibility product quoted in a
+                reference, e.g. GF2013). The default None uses the value derived
+                from the structure factors (xraylib).
+            verbose : int
+                If truthy, print crystal data and progress information.
+            """
             self._crystal_descriptor = crystal_descriptor
             self._hkl = hkl
             self._R = R # mm
@@ -74,9 +190,39 @@ class LaueCrystalFocusing():
             self._alfa_deg = alfa_deg  # CAN BE POSITIVE OR NEGATIVE
             self._integration_points = integration_points
             self._use_fast_hyp1f1 = use_fast_hyp1f1
+            # FEATURE (2026): apply_absorption toggles the NORMAL (photoelectric) absorption factor
+            # att = exp(-k*0.5*(t1+t2)*Im(chi0)). True (default) = physical behaviour; False reproduces
+            # paper2013.py (which sets attsym=1). Does NOT affect anomalous (Borrmann) absorption,
+            # which is always included via the complex Z and omega.
+            self._apply_absorption = apply_absorption
+            # FEATURE (2026): optional override of chi_h*chi_hbar. If not None, the value computed
+            # from the structure factors is replaced by this number in all the _calculate_constats_*
+            # helpers, e.g. to reproduce the exact chi_h*chi_hbar quoted in a reference such as GF2013.
+            self._chih2 = chih2
             self._verbose = verbose
 
     def get_crystal_data(self):
+        """
+        Compute the Bragg angle and susceptibility Fourier coefficients with
+        xraylib for the configured crystal, reflection and photon energy.
+
+        The susceptibilities are obtained from the structure factors as
+        chi = -r_e * lambda^2 * F / (pi * V).
+
+        Returns
+        -------
+        braggAngle : float
+            Bragg angle in radians.
+        chi0 : complex
+            Conjugate of the mean susceptibility chi_0 (so that Im(chi0) > 0 and
+            the normal-absorption factor att decays in the GF2016 convention).
+        chiH : complex
+            The h susceptibility chi_h (as computed, NOT conjugated).
+        chiHbar : complex
+            The -h susceptibility chi_{-h} = chi_hbar (as computed). The product
+            chiH*chiHbar then has Im > 0 for Si, matching the reference values,
+            so no conjugation is needed when forming chih2 = chi_h*chi_hbar.
+        """
         import xraylib
         #
         # get crystal data for silicon crystal
@@ -113,8 +259,10 @@ class LaueCrystalFocusing():
         #
         f0 = xraylib.Crystal_F_H_StructureFactor(cryst, ener, 0, 0, 0, debyeWaller, 1.0)
         fH = xraylib.Crystal_F_H_StructureFactor(cryst, ener, hh, kk, ll, debyeWaller, 1.0)
+        fHbar = xraylib.Crystal_F_H_StructureFactor(cryst, ener, -hh, -kk, -ll, debyeWaller, 1.0)
         if self._verbose: print("f0: (%f , %f)" % (f0.real, f0.imag))
         if self._verbose: print("fH: (%f , %f)" % (fH.real, fH.imag))
+        if self._verbose: print("fHbar: (%f , %f)" % (fHbar.real, fHbar.imag))
 
         #
         # convert structure factor in chi (or psi) = - classical_e_radius wavelength^2 fH /(pi volume)
@@ -135,17 +283,53 @@ class LaueCrystalFocusing():
 
         chi0 = cte * f0
         chiH = cte * fH
+        chiHbar = cte * fHbar
 
         if self._verbose: print("chi0: (%e , %e)" % (chi0.real, chi0.imag))
         if self._verbose: print("chiH: (%e , %e)" % (chiH.real, chiH.imag))
+        if self._verbose: print("chiHbar: (%e , %e)" % (chiHbar.real, chiHbar.imag))
 
-        return braggAngle, numpy.conjugate(chi0), numpy.conjugate(chiH)
+        # chi0 is conjugated so that the NORMAL-absorption factor att = exp[-k(t1+t2)/2*Im chi0]
+        # decays (raw Im(chi0) < 0 in this xraylib convention). chiH and chiHbar (= chi_{-h}) are
+        # returned as computed, so that chih2 = chiH*chiHbar reproduces the reference product directly
+        # (Im > 0 for Si) with no conjugate "fix" needed downstream.
+        return braggAngle, numpy.conjugate(chi0), chiH, chiHbar
 
     #
     # interface for q=0 or finite q
     #
     def xscan(self, q=1000.0, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
+        """
+        Transverse intensity/amplitude profile at a fixed distance q, for a
+        point source.
 
+        Dispatches to the appropriate equation depending on the source distance
+        p and observation distance q: GF2016 eq. 23 (p=0, q=0), eq. 24 (p=0,
+        finite q), eq. 30 (finite p, q=0) or eq. 31 (finite p, finite q).
+
+        Parameters
+        ----------
+        q : float
+            Crystal-to-observation distance in mm (q = 0 is the exit surface).
+        npoints_x : int
+            Number of transverse sampling points.
+        a_factor : float
+            Half-width of the x window in units of a = t1*sin(2 theta_B)/2; the
+            scan spans [-a*a_factor, a*a_factor].
+        a_center : float
+            Offset (mm) subtracted from the x grid (to centre on the pattern).
+        filename : str
+            If non-empty, save the resulting wavefront to this HDF5 file.
+
+        Returns
+        -------
+        xx : ndarray
+            Transverse coordinates in mm.
+        yy_amplitude : ndarray of complex
+            Complex Bragg-reflected amplitude at each x.
+        output_wavefront : GenericWavefront1D
+            WOFRY 1D wavefront wrapping (xx, yy_amplitude).
+        """
         if self._p == 0:
             if q == 0:
                 txt = "xscan_at_q0_and_p0() (Guigay & Ferrero 2016 eq 23 http://dx.doi.org/10.1107/S2053273316006549)"
@@ -178,7 +362,11 @@ class LaueCrystalFocusing():
 
     # x-scan at p=q=0 using Guigay % Ferrero 2016 eq 23
     def xscan_at_q0_and_p0(self, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
-
+        """
+        Transverse profile on the exit surface for a point source on the
+        entrance surface (p = 0, q = 0), using GF2016 eq. 23. Arguments and
+        return values are as in :meth:`xscan`.
+        """
         kwds = self._calculate_constats_for_equation23_2016()
         a = kwds['a']
 
@@ -210,7 +398,11 @@ class LaueCrystalFocusing():
 
     # x-scan at p=0, finite q, using Guigay % Ferrero 2016 eq 24
     def xscan_at_finite_q_and_p0(self, q=1000.0, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
-
+        """
+        Transverse profile at a finite distance q for a point source on the
+        entrance surface (p = 0), using GF2016 eq. 24. Arguments and return
+        values are as in :meth:`xscan`.
+        """
         kwds = self._calculate_constats_for_equation23_2016() #?????????????
         a = kwds['a']
 
@@ -242,7 +434,12 @@ class LaueCrystalFocusing():
 
     # x-scan at q=0 using Guigay % Ferrero 2016 eq 30
     def xscan_at_q0(self, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
-
+        """
+        Transverse profile on the exit surface (q = 0) for a point source at a
+        finite distance p, using GF2016 eq. 30. Raises if p == 0 (use
+        :meth:`xscan_at_q0_and_p0` instead). Arguments and return values are as
+        in :meth:`xscan`.
+        """
         if self._p == 0:
             raise Exception("For p=0 please use xscan_at_q0_and_p0()")
 
@@ -277,7 +474,12 @@ class LaueCrystalFocusing():
 
     # x-scan at finite q using Guigay % Ferrero 2016 eq 31
     def xscan_at_finite_q(self, q=1000.0, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
-
+        """
+        Transverse profile at a finite distance q for a point source at a finite
+        distance p, using GF2016 eq. 31. Raises if p == 0 (use
+        :meth:`xscan_at_finite_q_and_p0` instead). Arguments and return values
+        are as in :meth:`xscan`.
+        """
         if self._p == 0:
             raise Exception("For p=0 please use xscan_at_finite_q_and_p0()")
 
@@ -313,7 +515,28 @@ class LaueCrystalFocusing():
 ####################################
     # x-scan at p=q=0 using Guigay % Ferrero 2016 eq 23
     def xscan_for_external_wavefront(self, Phi=None, Phi_tau=None, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
+        """
+        Exit-surface field for an arbitrary incident field (rather than a point
+        source), using GF2016 eq. 28: D_h(x) is the integral of the incident
+        amplitude over the entrance coordinate tau weighted by the crystal
+        propagator P(x, tau).
 
+        Parameters
+        ----------
+        Phi : ndarray of complex, optional
+            Incident complex amplitude on the entrance surface; defaults to a
+            uniform (plane-wave) field.
+        Phi_tau : ndarray, optional
+            Entrance-surface coordinates tau (mm) for ``Phi``; interpolated
+            internally. Defaults to the x grid.
+        npoints_x, a_factor, a_center, filename :
+            As in :meth:`xscan`.
+
+        Returns
+        -------
+        xx, yy_amplitude, output_wavefront
+            As in :meth:`xscan`.
+        """
         ##################################
         # from srxraylib.plot.gol import plot
         # plot(Phi_tau, numpy.abs(Phi)**2)
@@ -390,7 +613,21 @@ class LaueCrystalFocusing():
                          t2=None,
                          chih2=None,
                          ):
+        """
+        Evaluate GF2016 eq. 23: the exit-surface amplitude at transverse
+        position ``x`` for a point source on the entrance surface (p = q = 0).
+        ``x`` is the TRUE exit-surface coordinate: at q = 0 there is no
+        propagation-induced lateral shift (x_c = q*(...) = 0), so no x_c is
+        subtracted here. Uses the Bessel form if alfa == 0, otherwise the Kummer
+        function. The many keyword arguments are the precomputed constants
+        returned by :meth:`_calculate_constats_for_equation23_2016`. Returns 0
+        for |x| > a.
 
+        Returns
+        -------
+        complex
+            The complex amplitude D_h(x).
+        """
         if numpy.abs(x) > a: return 0
 
         if alfa == 0:
@@ -402,7 +639,10 @@ class LaueCrystalFocusing():
             else:
                 kum = mpmath.hyp1f1(1j * kap, 1, 1j * acmax * (1 - (x / a) ** 2))
 
-        return numpy.exp((1j * k * chizero.real - k * chizero.imag) * 0.25 * (t1 + t2)) * \
+        # FEATURE (2026): split the (1j*Re - Im)*chizero factor into phase (kept) and normal
+        # absorption (gated). sqrt(att) is the amplitude form of att=exp(-k*0.5*(t1+t2)*Im chi0),
+        # so |.|^2 reproduces att; with apply_absorption=False, att=1 leaves only the phase.
+        return numpy.exp(1j * k * chizero.real * 0.25 * (t1 + t2)) * numpy.sqrt(att) * \
                kum * \
                numpy.exp(-1j * x ** 2 * k * mu1 / 2 / self._R) * \
                numpy.exp(1j * x * k * (omega.real - t1 * numpy.sin(teta1) / 2 / self._R)) * \
@@ -410,7 +650,17 @@ class LaueCrystalFocusing():
 
 
 
+    def _xc_equation24(self, q, omega=None, t1=None, teta1=None, **kwargs):
+        """
+        Lateral shift x_c (mm) of the pattern centre for eq. 24 (point source on
+        the entrance surface, p = 0), as a function of q [Guigay & Ferrero 2016,
+        eq. 25]:  x_c = q * (Re(omega) - t1*sin(theta_1)/(2R)).  Extra keyword
+        arguments (the rest of the constants dict) are ignored.
+        """
+        return q * (omega.real - t1 * numpy.sin(teta1) / (2 * self._R))
+
     # Guigay&Ferrero 2016: calculate equation 24, p=0, finite q
+    # 2026: written as a function of the TRUE observation coordinate x (x_c subtracted internally).
     def _equation24_2016(self, x, q,
                          a=None,
                          mu1=None,
@@ -436,13 +686,22 @@ class LaueCrystalFocusing():
                          t2=None,
                          chih2=None,
                          ):
-
+        """
+        Evaluate GF2016 eq. 24: the amplitude at the TRUE observation coordinate
+        ``x`` and distance ``q`` for a point source on the entrance surface
+        (p = 0). The lateral shift x_c is computed internally (eq. 25, via
+        :meth:`_xc_equation24`) and subtracted in the cosine, so the pattern is
+        centred at x = x_c. The integral over the influence region is folded onto
+        [0, a] with the absorption inside the cosine (valid because the integrand
+        is even in v for any fixed x - x_c). Keyword arguments are the precomputed
+        constants. Returns the complex amplitude D_h(x, q).
+        """
         #if numpy.abs(x) > a: return 0
         v = numpy.linspace(0, a, self._integration_points)
         y = numpy.zeros_like(v, dtype=complex)
         invle = 1 / q - mu1 / self._R
-
-
+        # 2026: function of the TRUE x; subtract the lateral shift x_c (eq. 25).
+        xc = self._xc_equation24(q, omega=omega, t1=t1, teta1=teta1)
 
         for i in range(v.size):
 
@@ -456,7 +715,8 @@ class LaueCrystalFocusing():
                     kum = mpmath.hyp1f1(1j * kap, 1, 1j * acmax * (1 - (v[i] / a) ** 2))
 
             Q1 = 1j * k * 0.5 * v[i] ** 2 * invle
-            Q2 = k * v[i] * (x / q - 1j * kiny)
+            # 2026: lateral argument uses (x - xc) so the field is expressed vs the true x.
+            Q2 = k * v[i] * ((x - xc) / q - 1j * kiny)
 
             y[i] = kum * \
                    numpy.exp(Q1) * \
@@ -493,7 +753,14 @@ class LaueCrystalFocusing():
                         t2      = None,
                         chih2   = None,
                       ):
-
+        """
+        Evaluate GF2016 eq. 28 for q = 0 with an arbitrary incident field: the
+        exit amplitude at ``x`` is the integral over the entrance coordinate tau
+        in [gamma(x-a), gamma(x+a)] of Phi(tau) * P(x, tau), with the incident
+        field supplied as the interpolators ``f_mag`` and ``f_phase`` (modulus
+        and phase versus tau). Remaining keyword arguments are the precomputed
+        constants. Returns the complex amplitude D_h(x).
+        """
         tau = numpy.linspace(gamma * (x - a), gamma * (x + a), self._integration_points)
         y = numpy.zeros_like(tau, dtype=complex)
 
@@ -524,7 +791,24 @@ class LaueCrystalFocusing():
         return amplitude
 
 ########################################
+    def _xc_equation30(self, pe=None, omega=None, g=None, a=None, gamma=None, a2=None, **kwargs):
+        """
+        Symmetry centre x_c (mm) of the q = 0 pattern for a source at finite p
+        (eq. 30). It is the q -> 0 limit of the eq. 31 / eq. 32 lateral shift:
+
+            x_c = pe * (Re(omega) + m),   m = (g/R)*a + gamma*a2/(2R)  (s = 0),
+
+        which keeps the q-scan central-intensity curve continuous at q = 0.
+        Requires the eq.-31 constants (in particular ``pe``); extra keyword
+        arguments (the rest of the constants dict) are ignored.
+        """
+        m = g * a / self._R + gamma * (a2 / (2 * self._R))
+        return pe * (omega.real + m)
+
     # Guigay&Ferrero 2016: calculate integral with limits -a,a in equation 30, finite p, q=0
+    # 2026: x is the TRUE exit coordinate. This is the full complex integral over [-a, a]
+    #       (not the folded/cosine form), so no x_c is subtracted; the pattern sits at its
+    #       physical centre (generally != 0 for finite p; see _xc_equation30 for that centre).
     def _equation30_2016(self, x,
                         a       = None,
                         mu1     = None,
@@ -542,9 +826,19 @@ class LaueCrystalFocusing():
                         g       = None,
                         kap     = None,
                         k       = None,
+                        att     = None,
                         chih2   = None,
                       ):
-
+        """
+        Evaluate GF2016 eq. 30: the exit-surface amplitude (q = 0) at the TRUE
+        exit coordinate ``x`` for a point source at a finite distance p. This is
+        the full complex integral over v in [-a, a] of the influence function
+        times the source/curvature phases (not the folded/cosine form), so no
+        x_c is subtracted: the pattern sits at its physical centre, which for
+        finite p is generally != 0 (see :meth:`_xc_equation30`). Keyword
+        arguments are the precomputed constants. Returns the complex amplitude
+        D_h(x).
+        """
         v = numpy.linspace(-a, a, self._integration_points)
         y = numpy.zeros_like(v, dtype=complex)
 
@@ -579,10 +873,33 @@ class LaueCrystalFocusing():
 
             y[i] = mfac * kum * numpy.exp(1j * k * Q)
 
-        return numpy.trapz(y, x=v)
+        # FIX (bug #5, 2026): eq30 was missing the normal-absorption factor (it carries no chi0/att
+        # term). Multiply by sqrt(att) [amplitude form of att = exp(-k*(t1+t2)/2*Im chi0)] so |.|^2
+        # carries the absorption, consistent with eq23/24/31. att is gated by apply_absorption.
+        return numpy.trapz(y, x=v) * numpy.sqrt(att)
+
+    def _xc_equation31(self, q, mu1=None, g=None, pe=None, omega=None, t1=None, teta1=None,
+                       gamma=None, a=None, a2=None, **kwargs):
+        """
+        Lateral shift x_c (mm) of the pattern centre for eq. 31, as a function of
+        the observation distance q [Guigay & Ferrero 2016, eq. 32]:
+
+            x_c = q * (Be*pe*Re(omega) + m*pe/qe - t1*sin(theta_1)/(2R)),
+
+        with Be = 1/pe + 1/qe and m = (g/R)*a + gamma*(s/p + a2/(2R)) (s = 0).
+        Extra keyword arguments (the remaining entries of the constants dict) are
+        ignored. Used by :meth:`_equation31_2016` (to express the field versus the
+        true x) and by :meth:`qscan` (to evaluate the central intensity at x_c).
+        """
+        qe = q * self._R / (self._R - q * mu1 - g * q)
+        be = 1 / qe + 1 / pe
+        s = 0
+        m = g * a / self._R + gamma * (s / self._p + a2 / 2 / self._R)
+        return q * (be * pe * omega.real + m * pe / qe - t1 * numpy.sin(teta1) / (2 * self._R))
 
     # Guigay&Ferrero 2016: calculate integral in equation 31 and add the corresponding phases, finite p, finite q
-    # note that the x argument here is in fact (x - xc) in eq. 31
+    # 2026: written as a function of the TRUE observation coordinate x; the lateral shift x_c
+    #       (eq. 32) is computed internally and subtracted, so the pattern is centred at x = x_c.
     def _equation31_2016(self, x, q,
                         a       = None,
                         mu1     = None,
@@ -608,13 +925,40 @@ class LaueCrystalFocusing():
                         t2      = None,
                         chih2   = None,
                       ):
-
-        v = numpy.linspace(-a, a, self._integration_points)
+        """
+        Evaluate GF2016 eq. 31: the amplitude at the TRUE observation coordinate
+        ``x`` and distance ``q`` for a point source at a finite distance p (the
+        general case). The lateral shift x_c is computed internally (eq. 32, via
+        :meth:`_xc_equation31`) and subtracted in the cosine, so the pattern is
+        centred at x = x_c (peak not at zero, as in GF2013 Fig. 4b/5b). The
+        integral is folded onto [0, a] with the absorption inside the cosine
+        (valid because the integrand is even in v for any fixed x - x_c); the
+        global phases P_g, which use the true x, are restored afterwards.
+        Keyword arguments are the precomputed constants. Returns the complex
+        amplitude D_h(x, q).
+        """
+        # FIX (bug #1, 2026): fold the integral onto [0, a] (with the factor 2 added at the
+        # trapz below) and put the absorption term -1j*kiny INSIDE the cosine argument.
+        # The previous version integrated over [-a, a] with a SEPARATE exp(-k*v*kiny) factor and
+        # a real-argument cosine. Because exp(-k*v*kiny) is odd in v, that is only correct when
+        # kiny (= omega_im) = 0, i.e. the symmetric case (alfa == 0); it gave wrong results for
+        # asymmetric crystals (alfa != 0). Correct folded form: see Guigay & Ferrero 2016 eq. 31
+        # and _equation24_2016 (which was already written correctly this way).
+        v = numpy.linspace(0, a, self._integration_points)
         y = numpy.zeros_like(v, dtype=complex)
         qe = q * self._R / (self._R - q * mu1 - g * q)
         be = 1 / qe + 1 / pe
         invle = 1 / (pe + qe) + g / self._R
         s = 0
+        # FIX (bug #2, 2026): geometric a2 (variable a2), NOT a**2 [GF2016, just after eq. 30].
+        # m enters only a phase, so it does not change |amplitude|^2, but it corrects the phase of
+        # the propagated complex wavefront.
+        m = g * a / self._R + gamma * (s / self._p + a2 / 2 / self._R)
+        # 2026: this routine is a function of the TRUE x; subtract the lateral shift x_c (eq. 32)
+        # in the cosine argument. The cosine / [0, a] folding stays valid because the integrand is
+        # even in v for any fixed (x - x_c).
+        xc = self._xc_equation31(q, mu1=mu1, g=g, pe=pe, omega=omega, t1=t1, teta1=teta1,
+                                 gamma=gamma, a=a, a2=a2)
         for i in range(v.size):
             yprime = acmax * (1 - (v[i] / a) ** 2)
 
@@ -628,19 +972,23 @@ class LaueCrystalFocusing():
                     kum = mpmath.hyp1f1(1j * kap, 1, 1j * yprime)
 
             Q1 = 1j * k * 0.5 * v[i] ** 2 * invle
-            Q2 = - k * v[i] * kiny
-            Q3 = k * v[i] * x / (q * pe * be)
-            y[i] = kum * numpy.exp(Q1 + Q2) * numpy.cos(Q3)
+            # FIX (bug #1, 2026): absorption -1j*kiny INSIDE the cosine (folded [0, a] form).
+            # 2026: the lateral argument uses (x - xc) so the field is expressed vs the true x.
+            Q3 = k * v[i] * ((x - xc) / (q * pe * be) - 1j * kiny)
+            y[i] = kum * numpy.exp(Q1) * numpy.cos(Q3)
 
-        amplitude = numpy.trapz(y, x=v)
+        # FIX (bug #1, 2026): factor 2 because the integral is folded onto [0, a].
+        amplitude = 2 * numpy.trapz(y, x=v)
 
-        amplitude *= numpy.sqrt(att / (lambda1 * q * self._p * be))
-        # omitted phase (see just after equation 30)
+        # FIX (bug #5, 2026): restore the gamma factor of GF2016 eq. 31 / paper eq. 25
+        # [prefactor = gamma * sqrt(att/(lambda*q*p*Be)), with Be = 1/be]. It was missing, so the
+        # asymmetric (gamma != 1) magnitude was off by gamma; symmetric (gamma = 1) was unaffected.
+        amplitude *= gamma * numpy.sqrt(att / (lambda1 * q * self._p * be))
+        # omitted phase (see just after equation 30); P_g uses the true x.
         amplitude *= numpy.exp(1j * k * x ** 2 / 2 / q) * \
                      numpy.exp(1j * k * s ** 2 / 2 / self._p) * \
                      numpy.exp(1j * k * chizero.real * (t1 + t2) / 4)
         # omitted phase (see just before equation 31)
-        m = g * a / self._R + gamma * (s / self._p + a ** 2 / 2 / self._R)  ## CHECK, shown after eq 30
         amplitude *= numpy.exp(- 1j * (k / 2 / be) * \
                                (x / q + t1 * numpy.sin(teta1) / 2 / self._R + m) ** 2)
         return amplitude
@@ -650,6 +998,18 @@ class LaueCrystalFocusing():
     #
 
     def _calculate_constats_for_equation23_2016(self):
+        """
+        Compute and pack the constants needed by :meth:`_equation23_2016` (and
+        also reused for eq. 24): geometry (a, t1, t2, gamma, theta_1/2, mu1/2,
+        a2), the strain-gradient parameter A, the Kummer parameter kap = beta,
+        the propagator parameters omega and g, the absorption factor att, the
+        susceptibilities and wavelength.
+
+        Returns
+        -------
+        dict
+            Keyword arguments consumed by the ``_equation*_2016`` evaluators.
+        """
         photon_energy_in_keV = self._photon_energy_in_keV
         p = self._p
         alfa = self._alfa_deg * numpy.pi / 180
@@ -657,11 +1017,19 @@ class LaueCrystalFocusing():
         poisson_ratio = self._poisson_ratio
         thickness = self._thickness
 
-        teta, chizero, chih = self.get_crystal_data()
+        teta, chizero, chih, chimh = self.get_crystal_data()
 
         lambda1 = codata.h * codata.c / codata.e / (photon_energy_in_keV * 1e3) * 1e3  # in mm
-        chimh = -1j * chih
+        # CONVENTION (2026): chih2 = chi_h * chi_hbar directly, with chih = chi_h and chimh = chi_{-h}
+        # the (un-conjugated) Fourier coefficients from get_crystal_data() -- chi_{-h} is the real (-h)
+        # structure factor, NOT a "-1j*chi_h" shortcut. For Si this product has Im(chi_h*chi_hbar) > 0,
+        # equal to GF2013's caption value (+3.26e-12) and to paper2013.py, with NO conjugate fix.
+        # (Only chi0 is returned conjugated, so the normal-absorption factor att decays; that is
+        # independent of this product. The sign of Im(chi_h*chi_hbar) sets the Borrmann branch / which
+        # +/-q focus is enhanced -- visible only at strong absorption, e.g. GF2013 Fig. 6 at 8.3 keV;
+        # GSdR2022 Table 1 uses the opposite sign convention.)
         chih2 = chih * chimh
+        if self._chih2 is not None: chih2 = self._chih2  # FEATURE (2026): user-supplied override
 
         if self._verbose:
             print("photon_energy_in_keV:", photon_energy_in_keV)
@@ -705,6 +1073,8 @@ class LaueCrystalFocusing():
         t2 = thickness / gam2
         qpoly = p * R * gam2 / (2 * p + R * gam1)
         att = numpy.exp(-k * 0.5 * (t1 + t2) * numpy.imag(chizero))
+        # FEATURE (2026): disable the normal-absorption factor to reproduce paper2013.py (attsym=1).
+        if not self._apply_absorption: att = 1.0
         s2max = 0.25 * t1 * t2
         u2max = u2 * s2max  # Omega = k**2 chi_h chi_hbar / 4 ? (end of pag 490)
         gamma = t2 / t1
@@ -727,7 +1097,10 @@ class LaueCrystalFocusing():
 
         acmax = acrist * s2max
         g = gamma * acrist * R / kp2
-        kap = u2max / acmax  # beta = Omega / A TODO acmax is zero when alfa is zero!!!!!!!!!!!!!!!!!!
+        # FIX (bug #3, 2026): guard the division when acmax == 0 (alfa == 0 => A == 0). kap (= beta
+        # = Omega / A) is unused in the symmetric (alfa == 0) Bessel branch, so 0.0 is a safe
+        # placeholder; this only avoids a 0/0 nan and its RuntimeWarning.
+        kap = (u2max / acmax) if acmax != 0 else 0.0  # beta = Omega / A
 
         pe = p * R / (gamma ** 2 * (R - p * mu2) - g * p)
 
@@ -778,6 +1151,17 @@ class LaueCrystalFocusing():
 
 
     def _calculate_constats_for_equation30_2016(self):
+        """
+        Compute and pack the constants needed by :meth:`_equation30_2016` (q = 0,
+        finite p). Same quantities as
+        :meth:`_calculate_constats_for_equation23_2016` minus the few entries
+        eq. 30 does not use.
+
+        Returns
+        -------
+        dict
+            Keyword arguments consumed by :meth:`_equation30_2016`.
+        """
         photon_energy_in_keV = self._photon_energy_in_keV
         p = self._p
         alfa = self._alfa_deg * numpy.pi / 180
@@ -785,11 +1169,19 @@ class LaueCrystalFocusing():
         poisson_ratio = self._poisson_ratio
         thickness = self._thickness
 
-        teta, chizero, chih = self.get_crystal_data()
+        teta, chizero, chih, chimh = self.get_crystal_data()
 
         lambda1 = codata.h * codata.c / codata.e / (photon_energy_in_keV * 1e3) * 1e3  # in mm
-        chimh = -1j * chih
+        # CONVENTION (2026): chih2 = chi_h * chi_hbar directly, with chih = chi_h and chimh = chi_{-h}
+        # the (un-conjugated) Fourier coefficients from get_crystal_data() -- chi_{-h} is the real (-h)
+        # structure factor, NOT a "-1j*chi_h" shortcut. For Si this product has Im(chi_h*chi_hbar) > 0,
+        # equal to GF2013's caption value (+3.26e-12) and to paper2013.py, with NO conjugate fix.
+        # (Only chi0 is returned conjugated, so the normal-absorption factor att decays; that is
+        # independent of this product. The sign of Im(chi_h*chi_hbar) sets the Borrmann branch / which
+        # +/-q focus is enhanced -- visible only at strong absorption, e.g. GF2013 Fig. 6 at 8.3 keV;
+        # GSdR2022 Table 1 uses the opposite sign convention.)
         chih2 = chih * chimh
+        if self._chih2 is not None: chih2 = self._chih2  # FEATURE (2026): user-supplied override
 
         if self._verbose:
             print("photon_energy_in_keV:", photon_energy_in_keV)
@@ -833,6 +1225,8 @@ class LaueCrystalFocusing():
         t2 = thickness / gam2
         qpoly = p * R * gam2 / (2 * p + R * gam1)
         att = numpy.exp(-k * 0.5 * (t1 + t2) * numpy.imag(chizero))
+        # FEATURE (2026): disable the normal-absorption factor to reproduce paper2013.py (attsym=1).
+        if not self._apply_absorption: att = 1.0
         s2max = 0.25 * t1 * t2
         u2max = u2 * s2max  # Omega = k**2 chi_h chi_hbar / 4 ? (end of pag 490)
         gamma = t2 / t1
@@ -855,7 +1249,10 @@ class LaueCrystalFocusing():
 
         acmax = acrist * s2max
         g = gamma * acrist * R / kp2
-        kap = u2max / acmax  # beta = Omega / A TODO acmax is zero when alfa is zero!!!!!!!!!!!!!!!!!!
+        # FIX (bug #3, 2026): guard the division when acmax == 0 (alfa == 0 => A == 0). kap (= beta
+        # = Omega / A) is unused in the symmetric (alfa == 0) Bessel branch, so 0.0 is a safe
+        # placeholder; this only avoids a 0/0 nan and its RuntimeWarning.
+        kap = (u2max / acmax) if acmax != 0 else 0.0  # beta = Omega / A
 
         pe = p * R / (gamma ** 2 * (R - p * mu2) - g * p)
 
@@ -894,11 +1291,23 @@ class LaueCrystalFocusing():
             "g"       : g,
             "kap"     : kap,
             "k"       : k,
+            "att"     : att,          # FIX (bug #5, 2026): now returned so eq30 can apply sqrt(att)
             "chih2"   : chih2,
             }
 
 
     def _calculate_constats_for_equation31_2016(self):
+        """
+        Compute and pack the constants needed by :meth:`_equation31_2016` (finite
+        p, finite q; the general case used by :meth:`qscan`). Includes the
+        effective distances pe (qe and Be are derived inside the evaluator from
+        the running q), omega, g, kap, att and the susceptibilities.
+
+        Returns
+        -------
+        dict
+            Keyword arguments consumed by :meth:`_equation31_2016`.
+        """
         photon_energy_in_keV = self._photon_energy_in_keV
         p = self._p
         alfa = self._alfa_deg * numpy.pi / 180
@@ -906,11 +1315,19 @@ class LaueCrystalFocusing():
         poisson_ratio = self._poisson_ratio
         thickness = self._thickness
 
-        teta, chizero, chih = self.get_crystal_data()
+        teta, chizero, chih, chimh = self.get_crystal_data()
 
         lambda1 = codata.h * codata.c / codata.e / (photon_energy_in_keV * 1e3) * 1e3  # in mm
-        chimh = -1j * chih
+        # CONVENTION (2026): chih2 = chi_h * chi_hbar directly, with chih = chi_h and chimh = chi_{-h}
+        # the (un-conjugated) Fourier coefficients from get_crystal_data() -- chi_{-h} is the real (-h)
+        # structure factor, NOT a "-1j*chi_h" shortcut. For Si this product has Im(chi_h*chi_hbar) > 0,
+        # equal to GF2013's caption value (+3.26e-12) and to paper2013.py, with NO conjugate fix.
+        # (Only chi0 is returned conjugated, so the normal-absorption factor att decays; that is
+        # independent of this product. The sign of Im(chi_h*chi_hbar) sets the Borrmann branch / which
+        # +/-q focus is enhanced -- visible only at strong absorption, e.g. GF2013 Fig. 6 at 8.3 keV;
+        # GSdR2022 Table 1 uses the opposite sign convention.)
         chih2 = chih * chimh
+        if self._chih2 is not None: chih2 = self._chih2  # FEATURE (2026): user-supplied override
 
         if self._verbose:
             print("photon_energy_in_keV:", photon_energy_in_keV)
@@ -954,6 +1371,8 @@ class LaueCrystalFocusing():
         t2 = thickness / gam2
         qpoly = p * R * gam2 / (2 * p + R * gam1)
         att = numpy.exp(-k * 0.5 * (t1 + t2) * numpy.imag(chizero))
+        # FEATURE (2026): disable the normal-absorption factor to reproduce paper2013.py (attsym=1).
+        if not self._apply_absorption: att = 1.0
         s2max = 0.25 * t1 * t2
         u2max = u2 * s2max  # Omega = k**2 chi_h chi_hbar / 4 ? (end of pag 490)
         gamma = t2 / t1
@@ -976,7 +1395,10 @@ class LaueCrystalFocusing():
 
         acmax = acrist * s2max
         g = gamma * acrist * R / kp2
-        kap = u2max / acmax  # beta = Omega / A TODO acmax is zero when alfa is zero!!!!!!!!!!!!!!!!!!
+        # FIX (bug #3, 2026): guard the division when acmax == 0 (alfa == 0 => A == 0). kap (= beta
+        # = Omega / A) is unused in the symmetric (alfa == 0) Bessel branch, so 0.0 is a safe
+        # placeholder; this only avoids a 0/0 nan and its RuntimeWarning.
+        kap = (u2max / acmax) if acmax != 0 else 0.0  # beta = Omega / A
 
         pe = p * R / (gamma ** 2 * (R - p * mu2) - g * p)
 
@@ -1029,7 +1451,30 @@ class LaueCrystalFocusing():
     # q-scan % Guigay&Ferrero 2016 eq 31
     #
     def qscan(self, qmin=0.0, qmax=10000.0, npoints=10):
+        """
+        On-axis (symmetry-centre) amplitude versus crystal-to-observation
+        distance q, i.e. the dynamical-focusing curve. For each q the field is
+        evaluated at the centre of the pattern (x - x_c = 0) using GF2016 eq. 31
+        (finite p) or eq. 24 (p = 0); the q = 0 point uses eq. 30 / eq. 23.
 
+        Note: ``R`` (and hence the constants) is fixed for the instance, so a
+        chromatic-focusing scan (R matched to each q) is done by creating one
+        instance per q, as in GFBMP2013_figs.py.
+
+        Parameters
+        ----------
+        qmin, qmax : float
+            Range of q in mm.
+        npoints : int
+            Number of q samples.
+
+        Returns
+        -------
+        qq : ndarray
+            The q values in mm.
+        yy_amplitude : ndarray of complex
+            Complex on-axis amplitude at each q (intensity = |.|^2).
+        """
         qq = numpy.linspace(qmin, qmax, npoints)
         yy_amplitude = numpy.zeros_like(qq, dtype=complex)
 
@@ -1046,16 +1491,23 @@ class LaueCrystalFocusing():
 
             if qq[j] == 0:
                 if self._p == 0.0:
-                    amplitude = self._equation23_2016(qq[j], **kwds_eq31)
+                    # p = q = 0: eq. 23 centre is x = 0 (x_c = q*(...) = 0).
+                    amplitude = self._equation23_2016(0.0, **kwds_eq31)
                 else:
-                    xcenter = 0.0 # TODO calculate the x value that corresponds to the symmetry center
+                    # 2026: eq. 30 uses the true x; for finite p the q = 0 symmetry centre is the
+                    # q -> 0 limit of the eq. 31 lateral shift (not 0). Evaluate eq. 30 there.
+                    xcenter = self._xc_equation30(**kwds_eq31)
                     amplitude = self._equation30_2016(xcenter, **kwds_eq30)
                 yy_amplitude[j] = amplitude
             else:
+                # 2026: _equation24/31_2016 are now functions of the true x, so evaluate at the
+                # pattern centre x = x_c to obtain the central (symmetry-centre) intensity.
                 if self._p == 0.0:
-                    amplitude = self._equation24_2016(0, qq[j], **kwds_eq31)
+                    xc = self._xc_equation24(qq[j], **kwds_eq31)
+                    amplitude = self._equation24_2016(xc, qq[j], **kwds_eq31)
                 else:
-                    amplitude = self._equation31_2016(0, qq[j], **kwds_eq31)
+                    xc = self._xc_equation31(qq[j], **kwds_eq31)
+                    amplitude = self._equation31_2016(xc, qq[j], **kwds_eq31)
                 yy_amplitude[j] = amplitude
         print(f"Progress: 100%")
         print("Calculation time: ", time.time() - t0)
@@ -1063,6 +1515,11 @@ class LaueCrystalFocusing():
         return qq, yy_amplitude
 
     def info(self):
+        """
+        Return a multi-line string summarizing the configured parameters
+        (crystal, hkl, R, Poisson ratio, energy, thickness, p, alfa, integration
+        points, verbosity).
+        """
         txt = ""
         txt += "\nself._crystal_descriptor    = %s" % (self._crystal_descriptor)
         txt += "\nself._hkl                   = " + repr(self._hkl)
