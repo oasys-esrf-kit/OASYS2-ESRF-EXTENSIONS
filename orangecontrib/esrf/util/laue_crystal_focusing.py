@@ -593,8 +593,49 @@ class LaueCrystalFocusing():
 
     ###################################
     def diffraction_profile_angle_scan(self, THETA):
+        """
+        Angular (far-field) diffraction profile of the Laue crystal.
 
-        print("diffraction_profile_angle_scan() (Guigay & Ferrero 2016 eq XX http://dx.doi.org/10.1107/S2053273316006549)")
+        The complex diffraction profile is the Fourier transform (Fraunhofer /
+        far-field limit) of the exit-surface field D_h(x):
+
+            D_h(theta) = integral_{-a}^{+a} D_h(x, q=0) exp(i k theta x) dx,
+
+        where theta is the observation angle around the diffracted-beam
+        direction and a = t sin(2 theta_B) / 2 is the half-width of the
+        Borrmann fan on the exit surface. The exit field D_h(x, q=0) is the
+        point-source (p = q = 0) field of Guigay & Ferrero 2016 (GF2016)
+        eq. 23 (Kummer form, asymmetric case) or, for alfa == 0, the Bessel
+        form (GF2013 eq. 10 / Kato 1961). Equivalently this is the
+        q -> infinity limit of the propagated field GF2016 eq. 24, in which
+        (x - x_c) / q -> theta.
+
+        Note that the profile is an intrinsic crystal property: it uses the
+        p = 0 exit field and does not depend on the source distance p.
+        |D_h(theta)|^2 is the reflectivity-versus-angle diffraction profile
+        (``method 2'' in Sanchez del Rio & Guigay).
+
+        Parameters
+        ----------
+        THETA : ndarray
+            Observation angles (radians), measured around the diffracted-beam
+            direction, at which to evaluate the profile.
+
+        Returns
+        -------
+        ndarray of complex
+            The complex diffraction profile D_h(theta); take the squared
+            modulus for the intensity (reflectivity) profile.
+
+        References
+        ----------
+        Guigay & Ferrero, Acta Cryst. (2016) A72, 489-499, eq. 23 and eq. 24,
+        http://dx.doi.org/10.1107/S2053273316006549
+        """
+
+        print("diffraction_profile_angle_scan(): FT of the exit field "
+              "(GF2016 eq. 23; far-field limit of eq. 24) "
+              "http://dx.doi.org/10.1107/S2053273316006549")
 
         AMPL = numpy.zeros_like(THETA, dtype=complex)
 
@@ -858,6 +899,30 @@ class LaueCrystalFocusing():
                         t2      = None,
                         chih2   = None,
                       ):
+        """
+        Far-field diffraction profile at a SINGLE observation angle.
+
+        Evaluates the Fourier component, at the angle ``inclination``, of the
+        exit-surface field over the Borrmann fan x in [-a, a]:
+
+            D_h(inclination) = integral_{-a}^{+a} D_h(x, q=0)
+                                   exp(i k x inclination) dx.
+
+        The integrand D_h(x, q=0) is the GF2016 eq. 23 exit field (Bessel
+        form for alfa == 0, Kummer form otherwise) --- identical to the
+        integrand of :meth:`_equation23_2016`. The keyword arguments are the
+        precomputed constants (from
+        :meth:`_calculate_constats_for_equation31_2016`). This non-vectorized
+        form is kept for reference; :meth:`_equationXX_2016_vectorized` is
+        equivalent but faster (it builds the exit field once and reuses it for
+        all angles).
+
+        Returns
+        -------
+        complex
+            The complex diffraction profile at the single angle
+            ``inclination``.
+        """
 
         X = numpy.linspace(-a, a, self._integration_points)
         amplitude = numpy.zeros_like(X, dtype=complex)
@@ -914,6 +979,26 @@ class LaueCrystalFocusing():
                         t2      = None,
                         chih2   = None,
                       ):
+        """
+        Far-field diffraction profile over an ARRAY of observation angles
+        (vectorized version of :meth:`_equationXX_2016`).
+
+        The exit-surface field D_h(x, q=0) [GF2016 eq. 23; Bessel form for
+        alfa == 0, Kummer form otherwise] is built once on the grid
+        x in [-a, a], and its Fourier transform is then evaluated at every
+        angle in ``THETA``:
+
+            D_h(theta) = integral_{-a}^{+a} D_h(x, q=0) exp(i k x theta) dx.
+
+        This is the far-field (q -> infinity) limit of the propagated field
+        GF2016 eq. 24. The keyword arguments are the precomputed constants
+        (from :meth:`_calculate_constats_for_equation31_2016`).
+
+        Returns
+        -------
+        ndarray of complex
+            The complex diffraction profile at each angle in ``THETA``.
+        """
 
         X = numpy.linspace(-a, a, self._integration_points)
         amplitude = numpy.zeros_like(X, dtype=complex)
