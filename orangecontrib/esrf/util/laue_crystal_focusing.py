@@ -514,7 +514,13 @@ class LaueCrystalFocusing():
 
 ####################################
     # x-scan at p=q=0 using Guigay % Ferrero 2016 eq 23
-    def xscan_for_external_wavefront(self, Phi=None, Phi_tau=None, npoints_x=10, a_factor=1, a_center=0.0, filename=""):
+    def xscan_for_external_wavefront(self,
+                                     Phi=None,
+                                     Phi_tau=None, # in mm !!!!!!!!!!!!
+                                     npoints_x=10,
+                                     a_factor=1,
+                                     a_center=0.0,
+                                     filename=""):
         """
         Exit-surface field for an arbitrary incident field (rather than a point
         source), using GF2016 eq. 28: D_h(x) is the integral of the incident
@@ -547,6 +553,7 @@ class LaueCrystalFocusing():
         a = kwds['a']
 
         # x-scan at q=0
+        print("xscan_for_external_wavefront() (Guigay & Ferrero 2016 eq 28 http://dx.doi.org/10.1107/S2053273316006549)")
         print("a=%.3f mm..." % (a))
 
         xx = numpy.linspace(-a * a_factor, a * a_factor, npoints_x) - a_center
@@ -582,6 +589,40 @@ class LaueCrystalFocusing():
             print("File %s written to disk" % filename)
 
         return xx, yy_amplitude, output_wavefront
+
+
+    ###################################
+    def diffraction_profile_angle_scan(self, THETA):
+
+        print("diffraction_profile_angle_scan() (Guigay & Ferrero 2016 eq XX http://dx.doi.org/10.1107/S2053273316006549)")
+
+        AMPL = numpy.zeros_like(THETA, dtype=complex)
+
+        kwds = self._calculate_constats_for_equation31_2016()
+        print("a=%.3f mm..." % (kwds['a']))
+        print("k=%.3g mm..." % (kwds['k']))
+
+        ##
+        # Phi = output_wavefront.get_complex_amplitude()
+        # Phi_x = output_wavefront.get_abscissas() * 1e3
+        ##
+        # # interpolator
+        # f_mag = interpolate.interp1d(Phi_x, numpy.abs(Phi), kind='linear', bounds_error=False, fill_value=0)
+        # f_phase = interpolate.interp1d(Phi_x, numpy.angle(Phi), kind='linear', bounds_error=False, fill_value=0)
+
+        if 0: # not vectorized
+            print(f"Progress: 0%")
+            for i, inclination in enumerate(THETA):
+                progress = (i + 1) / THETA.size
+                if (progress * 100) % 10 <= (100 / THETA.size):
+                    print(f"Progress: {100 * progress:.0f}%")
+                amplitude = self._equationXX_2016(inclination, **kwds)
+                AMPL[i] = amplitude
+            print(f"Progress: 100%")
+        else: # vectorized
+            AMPL = self._equationXX_2016_vectorized(THETA, **kwds)
+
+        return AMPL
 ####################################
     #
     # private methods
@@ -722,7 +763,7 @@ class LaueCrystalFocusing():
                    numpy.exp(Q1) * \
                    numpy.cos(Q2)
 
-        return 2 * numpy.trapz(y, x=v) * numpy.sqrt(att / numpy.abs(lambda1 * q))
+        return 2 * numpy.trapezoid(y, x=v) * numpy.sqrt(att / numpy.abs(lambda1 * q))
 
 ########################################
     # Guigay&Ferrero 2016: calculate integral in equation 28 for q=0 with a given wavefront amplitude defined at p=0
@@ -787,9 +828,125 @@ class LaueCrystalFocusing():
             A = f_mag(tau[i]) * numpy.exp(1j * f_phase(tau[i]))
             y[i] = A * kum * numpy.exp(Q1 + Q2 + Q3 + Q4)
 
-        amplitude = numpy.trapz(y, x=tau)
+        amplitude = numpy.trapezoid(y, x=tau)
         return amplitude
 
+    # for rocking curve...
+    def _equationXX_2016(self, inclination,
+                        # f_mag, f_phase, # interpolator
+                        a       = None,
+                        mu1     = None,
+                        mu2     = None,
+                        teta    = None,
+                        teta1   = None,
+                        teta2   = None,
+                        alfa    = None,
+                        acrist  = None,
+                        gamma   = None,
+                        lambda1 = None,
+                        omega   = None,
+                        t1      = None,
+                        a2      = None,
+                        g       = None,
+                        kap     = None,
+                        k       = None,
+                        pe      = None,
+                        acmax   = None,
+                        kiny    = None,
+                        att     = None,
+                        chizero = None,
+                        t2      = None,
+                        chih2   = None,
+                      ):
+
+        X = numpy.linspace(-a, a, self._integration_points)
+        amplitude = numpy.zeros_like(X, dtype=complex)
+
+        for i, x in enumerate(X):
+
+            arg1 = a ** 2 - x ** 2
+            if arg1 < 0: arg1 = 0
+
+            if alfa == 0:
+                Z = k * numpy.sqrt(chih2) / numpy.sin(2 * teta)
+                kum = BesselJ(0, Z * numpy.sqrt(arg1))
+                Q1 = - 1j * k * x * (x + a) / (2 * self._R * numpy.cos(teta))
+                Q2 = 0
+            else:
+                yprime = acrist * gamma *  arg1 / (numpy.sin(2 * teta))**2
+
+                if self._use_fast_hyp1f1:
+                    kum = fast_hyp1f1(kap, yprime)
+                else:
+                    kum = mpmath.hyp1f1(1j * kap, 1, 1j * yprime)
+                Q1 = 1j * k * x * omega
+                Q2 = -1j * k * (mu1 * x**2 + x * t1 * numpy.sin(teta1)) / (2 * self._R)
+
+            A = numpy.exp(Q1 + Q2)
+            amplitude[i] = A * kum * numpy.exp(1j * k * x * inclination)
+
+        amplitude = numpy.trapezoid(amplitude, x=X)
+        return amplitude
+
+    def _equationXX_2016_vectorized(self, THETA,
+                        # f_mag, f_phase, # interpolator
+                        a       = None,
+                        mu1     = None,
+                        mu2     = None,
+                        teta    = None,
+                        teta1   = None,
+                        teta2   = None,
+                        alfa    = None,
+                        acrist  = None,
+                        gamma   = None,
+                        lambda1 = None,
+                        omega   = None,
+                        t1      = None,
+                        a2      = None,
+                        g       = None,
+                        kap     = None,
+                        k       = None,
+                        pe      = None,
+                        acmax   = None,
+                        kiny    = None,
+                        att     = None,
+                        chizero = None,
+                        t2      = None,
+                        chih2   = None,
+                      ):
+
+        X = numpy.linspace(-a, a, self._integration_points)
+        amplitude = numpy.zeros_like(X, dtype=complex)
+
+        for i, x in enumerate(X):
+
+            arg1 = a ** 2 - x ** 2
+            if arg1 < 0: arg1 = 0
+
+            if alfa == 0:
+                Z = k * numpy.sqrt(chih2) / numpy.sin(2 * teta)
+                kum = BesselJ(0, Z * numpy.sqrt(arg1))
+                Q1 = - 1j * k * x * (x + a) / (2 * self._R * numpy.cos(teta))
+                Q2 = 0
+            else:
+                yprime = acrist * gamma *  arg1 / (numpy.sin(2 * teta))**2
+
+                if self._use_fast_hyp1f1:
+                    kum = fast_hyp1f1(kap, yprime)
+                else:
+                    kum = mpmath.hyp1f1(1j * kap, 1, 1j * yprime)
+                Q1 = 1j * k * x * omega
+                Q2 = -1j * k * (mu1 * x**2 + x * t1 * numpy.sin(teta1)) / (2 * self._R)
+
+            A = numpy.exp(Q1 + Q2)
+            amplitude[i] = A * kum # * numpy.exp(1j * k * x * inclination)
+
+        AMPLITUDE_INTEGRATED = numpy.zeros_like(THETA, dtype=complex)
+        for i, inclination in enumerate(THETA):
+            AMPLITUDE_INTEGRATED[i] = numpy.trapezoid(amplitude * numpy.exp(1j * k * X * inclination), x=X)
+        return AMPLITUDE_INTEGRATED
+        # amplitude_integrated = numpy.trapz(amplitude, x=X)
+        # return amplitude_integrated
 ########################################
     def _xc_equation30(self, pe=None, omega=None, g=None, a=None, gamma=None, a2=None, **kwargs):
         """
@@ -876,7 +1033,7 @@ class LaueCrystalFocusing():
         # FIX (bug #5, 2026): eq30 was missing the normal-absorption factor (it carries no chi0/att
         # term). Multiply by sqrt(att) [amplitude form of att = exp(-k*(t1+t2)/2*Im chi0)] so |.|^2
         # carries the absorption, consistent with eq23/24/31. att is gated by apply_absorption.
-        return numpy.trapz(y, x=v) * numpy.sqrt(att)
+        return numpy.trapezoid(y, x=v) * numpy.sqrt(att)
 
     def _xc_equation31(self, q, mu1=None, g=None, pe=None, omega=None, t1=None, teta1=None,
                        gamma=None, a=None, a2=None, **kwargs):
@@ -978,7 +1135,7 @@ class LaueCrystalFocusing():
             y[i] = kum * numpy.exp(Q1) * numpy.cos(Q3)
 
         # FIX (bug #1, 2026): factor 2 because the integral is folded onto [0, a].
-        amplitude = 2 * numpy.trapz(y, x=v)
+        amplitude = 2 * numpy.trapezoid(y, x=v)
 
         # FIX (bug #5, 2026): restore the gamma factor of GF2016 eq. 31 / paper eq. 25
         # [prefactor = gamma * sqrt(att/(lambda*q*p*Be)), with Be = 1/be]. It was missing, so the
@@ -1595,7 +1752,7 @@ if __name__ == "__main__":
     #
     # fig 2
     #
-    if 1:
+    if 0:
         a = LaueCrystalFocusing(
             R = 2000,
             poisson_ratio = 0.2201,
@@ -1612,3 +1769,25 @@ if __name__ == "__main__":
         xx, yy_amplitude, _ = a.xscan_for_external_wavefront(npoints_x=500, a_factor=1.0, a_center=0.0, filename="")  # same as before
 
         plot(xx, numpy.abs(yy_amplitude) ** 2, xtitle='x [mm]', ytitle="Intensity", title="", grid=1, show=1)
+
+    # rocking curve
+    #
+    if 1:
+        a = LaueCrystalFocusing(
+            crystal_descriptor='Diamond',
+            hkl=[1, 1, 1],
+            R = -1e3, #mm
+            poisson_ratio = 0.2201,
+            photon_energy_in_keV = 17.0,
+            thickness = 155e-3,  # mm
+            p = 0.0,  # mm
+            alfa_deg = 5,  # CAN BE POSITIVE OR NEGATIVE)
+            use_fast_hyp1f1=0,
+            verbose=1,
+            )
+
+        print(a.info())
+
+        THETA = numpy.linspace(-0.0001, 0.0001, 1000)
+        AMPL = a.diffraction_profile_angle_scan(THETA)
+        plot(THETA, numpy.abs(AMPL) ** 2, title="Diffraction Profile", grid=1, show=1)
