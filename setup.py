@@ -54,7 +54,7 @@ import sys
 from setuptools import find_packages, setup
 
 NAME = 'OASYS2-ESRF-EXTENSIONS'
-VERSION = '0.0.17'
+VERSION = '0.0.18'
 ISRELEASED = False
 
 DESCRIPTION = 'oasys2-esrf-extensions'
