@@ -3,10 +3,11 @@ import contextlib
 import io
 import os
 import pathlib
+import sys
 import time
+import uuid
 
 import joblib
-from joblib import Parallel, delayed
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Input, Output
@@ -14,17 +15,11 @@ from orangewidget.widget import Input, Output
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 from oasys2.widget import gui as oasysgui
 from oasys2.widget.gui import MessageDialog, Styles
-from oasys2.widget.widget import OWWidget
-
-from orangecontrib.esrf.shadow4.util.parallel import (
-    concatenate_shadow_data,
+from oasys2.widget.widget import OWAction, OWWidget
+from shadow4.tools.parallel import (
     cpu_info_text,
+    get_parallel_runner_prototype,
     load_runner_module,
-    make_parallel_runner_module_from_s4beamline,
-    make_runner_module_from_s4beamline,
-    print_cpu_info,
-    seed_for_iteration,
-    validate_parallel_beamline,
 )
 from orangecontrib.shadow4.util.python_script import PythonScript
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
@@ -35,7 +30,7 @@ class OWParallel(OWWidget):
     description = "Run additional Shadow4 beamline repetitions in parallel"
     icon = "icons/uicons_parallel.png"
     priority = 6
-    keywords = ["barc", "shadow4", "parallel", "joblib", "repetitions", "seed"]
+    keywords = ["esrf", "shadow4", "parallel", "joblib", "repetitions", "seed"]
 
     want_main_area = 1
 
@@ -48,12 +43,16 @@ class OWParallel(OWWidget):
     number_of_repetitions = Setting(5)
     number_of_rays = Setting(10000)
     n_jobs = Setting(-1)
-    runner_script_file_name = Setting("runner_from_oasys.py")
+    base_seed = Setting(0)
 
     def __init__(self):
         super().__init__()
 
         self._shadow_data = None
+
+        self.runaction = OWAction("Run Parallel", self)
+        self.runaction.triggered.connect(self.run_parallel)
+        self.addAction(self.runaction)
 
         button_box = oasysgui.widgetBox(
             self.controlArea,
@@ -102,33 +101,16 @@ class OWParallel(OWWidget):
             orientation="horizontal",
             callback=self.set_script,
         )
-
-        file_box = oasysgui.widgetBox(
-            self.controlArea,
-            "Runner Script",
-            addSpace=True,
-            orientation="vertical",
-            width=390,
-        )
-        figure_box = oasysgui.widgetBox(
-            file_box,
-            "",
-            addSpace=True,
-            orientation="horizontal",
-            width=370,
-            height=35,
-        )
-        self.le_runner_script_file_name = oasysgui.lineEdit(
-            figure_box,
+        self.le_base_seed = oasysgui.lineEdit(
+            settings_box,
             self,
-            "runner_script_file_name",
-            "Script file",
-            labelWidth=90,
-            valueType=str,
+            "base_seed",
+            "Base seed",
+            labelWidth=190,
+            valueType=int,
             orientation="horizontal",
+            callback=self.set_script,
         )
-        self.le_runner_script_file_name.setFixedWidth(240)
-        gui.button(figure_box, self, "...", callback=self.select_runner_script_file)
 
         # info_box = oasysgui.widgetBox(
         #     self.controlArea,
@@ -172,6 +154,7 @@ class OWParallel(OWWidget):
     def set_shadow_data(self, shadow_data):
         self._shadow_data = shadow_data
         self._prefill_number_of_rays()
+        self._prefill_base_seed()
         self.set_script()
 
     def set_script(self):
@@ -183,33 +166,11 @@ class OWParallel(OWWidget):
             return
 
         try:
-            runner_path = make_parallel_runner_module_from_s4beamline(
-                deepcopy(self._shadow_data.beamline),
-                number_of_repetitions=int(self.number_of_repetitions),
-                number_of_rays=int(self.number_of_rays),
-                n_jobs=int(self.n_jobs),
-                output_file="s4_beam.h5",
-            )
-            runner_path = pathlib.Path(runner_path)
-            self.shadow4_script.set_code(runner_path.read_text(encoding="utf-8"))
-            try:
-                runner_path.unlink()
-            except Exception:
-                pass
+            self.shadow4_script.set_code(self._script_code())
         except Exception as exception:
             self.shadow4_script.set_code(
                 "Problem in writing python script:\n%s" % str(exception)
             )
-
-    def select_runner_script_file(self):
-        self.le_runner_script_file_name.setText(
-            oasysgui.selectSaveFileFromDialog(
-                self,
-                self.runner_script_file_name,
-                default_file_name="runner_from_oasys.py",
-                file_extension_filter="Python Files (*.py)",
-            )
-        )
 
     def run_parallel(self):
         self.setStatusMessage("")
@@ -253,51 +214,27 @@ class OWParallel(OWWidget):
     def _run(self, number_of_repetitions, number_of_rays, n_jobs):
         t_total = time.perf_counter()
 
-        print_cpu_info()
-        print("")
-        print("Number of repetitions:", number_of_repetitions)
-        print("Number of rays:", number_of_rays)
-        if n_jobs == -1:
-            n_jobs = joblib.cpu_count()
-        print("Number of cores:", n_jobs)
-
-        beamline = deepcopy(self._shadow_data.beamline)
-
-        runner_path = make_runner_module_from_s4beamline(
-            beamline,
-            module_path=self._runner_script_path(),
-        )
-        runner_module = load_runner_module(runner_path)
-        print("")
-        print("Runner module:", runner_path)
-        print("")
-
-        base_seed = int(beamline.get_light_source().get_seed())
-        seed_list = [seed_for_iteration(base_seed, i) for i in range(number_of_repetitions)]
-
         self.progressBarSet(10)
-        t_parallel = time.perf_counter()
-        results = Parallel(n_jobs=n_jobs, backend="loky")(
-            delayed(runner_module.run_beamline)(seed=seed, nrays=number_of_rays)
-            for seed in seed_list
-        )
-        parallel_elapsed = time.perf_counter() - t_parallel
-        self.progressBarSet(70)
+        runner_path = self._temporary_runner_script_path()
+        try:
+            runner_path.write_text(self._script_code(), encoding="utf-8")
+            self._prepare_runner_import_path(runner_path)
+            runner_module = load_runner_module(runner_path)
 
-        seed_list = [result[0] for result in results]
-        beam_list = [result[1] for result in results]
-        footprint_list = [result[2] for result in results]
-
-        t_concatenate = time.perf_counter()
-        beamline_acc, beam_acc, footprint_acc = concatenate_shadow_data(
-            beamline,
-            beam_list,
-            footprint_list,
-            seed_list,
-            verbose=True,
-        )
-        concatenate_elapsed = time.perf_counter() - t_concatenate
-        self.progressBarSet(95)
+            t_parallel = time.perf_counter()
+            seed_list, beamline_acc, beam_acc, footprint_acc = runner_module.run_parallel(
+                number_of_repetitions=number_of_repetitions,
+                number_of_rays=number_of_rays,
+                n_jobs=n_jobs,
+                base_seed=int(self.base_seed),
+            )
+            parallel_elapsed = time.perf_counter() - t_parallel
+            self.progressBarSet(95)
+        finally:
+            try:
+                runner_path.unlink()
+            except Exception:
+                pass
 
         output_data = ShadowData(
             beam=beam_acc,
@@ -309,10 +246,11 @@ class OWParallel(OWWidget):
         output_data.scanning_data = self._shadow_data.scanning_data
 
         print("")
-        print("Parallel elapsed: %.3f s" % parallel_elapsed)
-        print("Concatenation elapsed: %.3f s" % concatenate_elapsed)
+        print("Generated runner elapsed: %.3f s" % parallel_elapsed)
         print("Total elapsed: %.3f s" % (time.perf_counter() - t_total))
         print("Accumulated rays:", beam_acc.N)
+        print("Seeds:", seed_list)
+
         self.progressBarSet(100)
         return output_data
 
@@ -325,9 +263,7 @@ class OWParallel(OWWidget):
             raise ValueError("Shadow Data does not contain an S4 beamline.")
         if self._shadow_data.beamline.get_light_source() is None:
             raise ValueError("Shadow Data beamline does not contain a light source.")
-        validate_parallel_beamline(self._shadow_data.beamline)
-        if not str(self.runner_script_file_name).strip():
-            raise ValueError("Runner script file name is empty.")
+        get_parallel_runner_prototype(self._shadow_data.beamline)
 
     def _validate_number_of_repetitions(self):
         number_of_repetitions = int(self.number_of_repetitions)
@@ -378,25 +314,42 @@ class OWParallel(OWWidget):
         self.n_jobs = n_jobs
         return n_jobs
 
-    def _runner_script_path(self):
-        file_name = str(self.runner_script_file_name).strip()
+    def _script_code(self):
+        return deepcopy(self._shadow_data.beamline).to_python_code_parallel(
+            number_of_repetitions=int(self.number_of_repetitions),
+            number_of_rays=int(self.number_of_rays),
+            n_jobs=int(self.n_jobs),
+            base_seed=int(self.base_seed),
+            output_file="s4_beam.h5",
+        )
 
-        if not file_name.endswith(".py"):
-            file_name += ".py"
-            self.runner_script_file_name = file_name
-            self.le_runner_script_file_name.setText(file_name)
+    def _temporary_runner_script_path(self):
+        runner_dir = pathlib.Path(os.getcwd()) / ".oasys_shadow4_parallel"
+        runner_dir.mkdir(parents=True, exist_ok=True)
+        file_name = "parallel_runner_from_oasys_%d_%s.py" % (
+            os.getpid(),
+            uuid.uuid4().hex,
+        )
+        return runner_dir / file_name
 
-        if os.path.isabs(file_name):
-            return file_name
+    @staticmethod
+    def _prepare_runner_import_path(runner_path):
+        module_dir = str(pathlib.Path(runner_path).resolve().parent)
 
-        return os.path.abspath(file_name)
+        if module_dir not in sys.path:
+            sys.path.insert(0, module_dir)
+
+        pythonpath = os.environ.get("PYTHONPATH", "")
+        paths = [path for path in pythonpath.split(os.pathsep) if path]
+        if module_dir not in paths:
+            os.environ["PYTHONPATH"] = os.pathsep.join([module_dir] + paths)
 
     def _prefill_number_of_rays(self):
         if self._shadow_data is None:
             return
 
         try:
-            light_source = self._shadow_data.beamline.get_light_source()
+            light_source = self._prototype_light_source()
             if hasattr(light_source, "get_nrays"):
                 number_of_rays = int(light_source.get_nrays())
             else:
@@ -407,6 +360,21 @@ class OWParallel(OWWidget):
                 self.le_number_of_rays.setText(str(number_of_rays))
         except Exception:
             return
+
+    def _prefill_base_seed(self):
+        if self._shadow_data is None:
+            return
+
+        try:
+            light_source = self._prototype_light_source()
+            base_seed = int(light_source.get_seed())
+            self.base_seed = base_seed
+            self.le_base_seed.setText(str(base_seed))
+        except Exception:
+            return
+
+    def _prototype_light_source(self):
+        return get_parallel_runner_prototype(self._shadow_data.beamline).get_light_source()
 
 
 add_widget_parameters_to_module(__name__)
