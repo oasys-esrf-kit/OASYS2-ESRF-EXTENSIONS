@@ -51,6 +51,7 @@ __date__ = "04/11/2025"
 
 import os
 import sys
+
 from setuptools import find_packages, setup
 
 NAME = 'OASYS2-ESRF-EXTENSIONS'
@@ -88,6 +89,7 @@ SETUP_REQUIRES = (
 
 INSTALL_REQUIRES = (
                     'oasys2>=0.0.51',
+                    'shadow4>=0.1.87',
                     'pandas',
                     'numba',
                     'oasys-barc4ro>=2025.9.9',
@@ -96,7 +98,6 @@ INSTALL_REQUIRES = (
                     # 'spectrum-builder>=1.0.5',     # to be added in the future, now install manually
                     # 'accelerator-toolbox==0.6.1', # in stand-by, gives problems in windows
                     # 'crystalpy>=0.0.25',  # todo: remove?, base lib of oasys2
-                    # 'shadow4>=0.1.70',
                     # 'xoppylib>=1.0.46',
                     )
 
