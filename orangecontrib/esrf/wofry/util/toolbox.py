@@ -1,26 +1,13 @@
-import numpy
-from scipy.interpolate import interp2d
-import scipy.constants as codata
-import xraylib
-
-from oasys2.widget.util.widget_util import write_surface_file, read_surface_file
-from oasys2.widget.util.widget_objects import OasysSurfaceData
-
-
 from syned.beamline.optical_element import OpticalElement
-from syned.widget.widget_decorator import WidgetDecorator
 
 from wofry.beamline.decorators import OpticalElementDecorator
 from wofry.propagator.polarization import Polarization
-
 from wofry.propagator.wavefront2D.generic_wavefront import GenericWavefront2D
 from wofry.propagator.wavefront1D.generic_wavefront import GenericWavefront1D
 
 
 # mimics a syned element
 # class Toolbox(OpticalElement):  # to be written the 2D version....
-
-
 class WOToolbox1D(OpticalElement, OpticalElementDecorator):
     def __init__(self,
                  name="Undefined",

@@ -35,15 +35,21 @@
 # Install from sources (devel):
 #     git clone https://github.com/oasys-kit-esrf/OASYS2-ESRF-EXTENSIONS
 #     cd OASYS2-ESRF-EXTENSIONS
-#     python -m pip install -e . --no-deps --no-binary :all:
+#     python -m pip install -e . --no-deps --no-build-isolation
+#     # NOTE: use --no-build-isolation, NOT --no-binary :all:. The latter forces an
+#     # isolated source build that writes a setuptools wheel to the pip cache and
+#     # fails with "[Errno 13] Permission denied: ...\\pip\\cache\\wheels\\..." .
 #
 # Upload to pypi (when uploading, increment the version number):
-#     python setup.py register (only once, not longer needed)
 #     # use python > 3.10, pip > 25.2 (packages needed: twine)
 #     rm -fR dist
 #     python setup.py sdist
 #     python -m twine upload dist/*
+#          
+# Install from pypi:
+#     pip install shadow4
 #
+
 
 __authors__ = ["M Sanchez del Rio, Juan Reyes-Herrera, Rafael Celestre"]
 __license__ = "MIT"
@@ -55,7 +61,7 @@ import sys
 from setuptools import find_packages, setup
 
 NAME = 'OASYS2-ESRF-EXTENSIONS'
-VERSION = '0.0.19'
+VERSION = '0.0.20'
 ISRELEASED = False
 
 DESCRIPTION = 'oasys2-esrf-extensions'
