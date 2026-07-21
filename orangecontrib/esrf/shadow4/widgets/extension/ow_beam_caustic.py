@@ -13,7 +13,6 @@ from oasys2.widget.gui import MessageDialog, Styles
 from oasys2.widget.widget import OWWidget
 
 from barc4beams import Beam
-from barc4beams.viz import plot_caustic
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 
 
@@ -41,9 +40,6 @@ class OWBeamCaustic(OWWidget):
     finish = Setting(0.5)
     aspect_ratio = Setting(False)
     color = Setting(5)
-    use_z_range = Setting(False)
-    z_range_min = Setting(-0.5)
-    z_range_max = Setting(0.5)
     use_xy_range = Setting(False)
     xy_range_min = Setting(-100.0)
     xy_range_max = Setting(100.0)
@@ -158,27 +154,6 @@ class OWBeamCaustic(OWWidget):
             orientation="vertical",
             width=390,
         )
-        gui.checkBox(range_box, self, "use_z_range", "Set Z range", callback=self._update_visibility)
-        self.z_range_box = oasysgui.widgetBox(range_box, "", addSpace=False, orientation="vertical")
-        oasysgui.lineEdit(
-            self.z_range_box,
-            self,
-            "z_range_min",
-            "Z min [m]",
-            labelWidth=180,
-            valueType=float,
-            orientation="horizontal",
-        )
-        oasysgui.lineEdit(
-            self.z_range_box,
-            self,
-            "z_range_max",
-            "Z max [m]",
-            labelWidth=180,
-            valueType=float,
-            orientation="horizontal",
-        )
-
         gui.checkBox(range_box, self, "use_xy_range", "Set X/Y range", callback=self._update_visibility)
         self.xy_range_box = oasysgui.widgetBox(range_box, "", addSpace=False, orientation="vertical")
         oasysgui.lineEdit(
@@ -228,24 +203,18 @@ class OWBeamCaustic(OWWidget):
             if self.start >= self.finish:
                 raise ValueError("Start must be smaller than finish.")
 
-            caustic = self._beam.caustic(
-                n_points=n_points,
-                start=float(self.start),
-                finish=float(self.finish),
-            )
-
             self._clear_plots()
 
             which = self._which()
-            result = plot_caustic(
-                caustic,
+            result = self._beam.plot_caustic(
                 which=which,
                 aspect_ratio=bool(self.aspect_ratio),
                 color=self._color_index(),
-                z_range=self._range_or_none(self.use_z_range, self.z_range_min, self.z_range_max),
+                z_range=(float(self.start), float(self.finish)),
                 xy_range=self._range_or_none(self.use_xy_range, self.xy_range_min, self.xy_range_max),
                 bins=self._bins_or_none(),
                 top_stat=self._top_stat_or_none(),
+                n_points=n_points,
                 plot=False,
             )
 
@@ -296,7 +265,6 @@ class OWBeamCaustic(OWWidget):
             widget.deleteLater()
 
     def _update_visibility(self):
-        self.z_range_box.setVisible(bool(self.use_z_range))
         self.xy_range_box.setVisible(bool(self.use_xy_range))
 
     def _which(self):
