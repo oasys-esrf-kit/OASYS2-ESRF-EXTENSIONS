@@ -20,6 +20,7 @@ from barc4beams.viz import (
     plot_energy_vs_intensity,
     plot_intensity,
     plot_phase_space,
+    plot_rays,
 )
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 
@@ -98,6 +99,7 @@ class OWBeamPlot(OWWidget):
                 "Energy",
                 "Intensity",
                 "Energy vs Intensity",
+                "Rays",
             ],
             sendSelectedValue=False,
             orientation="horizontal",
@@ -156,14 +158,20 @@ class OWBeamPlot(OWWidget):
             self.color_box,
             self,
             "color",
-            label="Color",
+            label="Colormap",
             labelWidth=160,
             orientation="horizontal",
             items=COLOR_MAPS,
             sendSelectedValue=False,
         )
-        oasysgui.lineEdit(
+        self.bins_box = oasysgui.widgetBox(
             settings_box,
+            "",
+            addSpace=False,
+            orientation="vertical",
+        )
+        oasysgui.lineEdit(
+            self.bins_box,
             self,
             "bins",
             "Number of Bins (0 = auto)",
@@ -171,8 +179,14 @@ class OWBeamPlot(OWWidget):
             valueType=int,
             orientation="horizontal",
         )
-        oasysgui.lineEdit(
+        self.z_offset_box = oasysgui.widgetBox(
             settings_box,
+            "",
+            addSpace=False,
+            orientation="vertical",
+        )
+        oasysgui.lineEdit(
+            self.z_offset_box,
             self,
             "z_offset",
             "Z offset [m]",
@@ -258,7 +272,7 @@ class OWBeamPlot(OWWidget):
             common_kwargs = {
                 "mode": mode,
                 "aspect_ratio": bool(self.aspect_ratio),
-                "color": self._color_index(),
+                "cmap": self._colormap(),
                 "x_range": self._range_or_none(self.use_x_range, self.x_range_min, self.x_range_max),
                 "y_range": self._range_or_none(self.use_y_range, self.y_range_min, self.y_range_max),
                 "bins": self._bins_or_none(),
@@ -268,7 +282,17 @@ class OWBeamPlot(OWWidget):
 
             df = self._beam.df
 
-            if self.plot_type == 0:
+            if self.plot_type == 6:
+                rays_kwargs = {
+                    "aspect_ratio": bool(self.aspect_ratio),
+                    "x_range": common_kwargs["x_range"],
+                    "y_range": common_kwargs["y_range"],
+                    "z_offset": float(self.z_offset),
+                    "plot": False,
+                }
+                fig, _ = plot_rays(df, **rays_kwargs)
+                self._add_figure_tab("Rays", fig)
+            elif self.plot_type == 0:
                 fig, _ = plot_beam(df, **common_kwargs)
                 self._add_figure_tab("Beam", fig)
             elif self.plot_type == 1:
@@ -336,12 +360,15 @@ class OWBeamPlot(OWWidget):
     def _update_visibility(self):
         is_phase_space = self.plot_type == 2
         is_1d = self.plot_type in (3, 4)
+        is_rays = self.plot_type == 6
         is_2d = not is_1d
 
         self.phase_direction_box.setVisible(is_phase_space)
-        self.mode_box.setVisible(is_2d)
+        self.mode_box.setVisible(is_2d and not is_rays)
         self.aspect_ratio_box.setVisible(is_2d)
-        self.color_box.setVisible(is_2d)
+        self.color_box.setVisible(is_2d and not is_rays)
+        self.bins_box.setVisible(not is_rays)
+        self.z_offset_box.setVisible(self.plot_type in (0, 2, 6))
         self.range_box.setVisible(is_2d)
         self.x_range_box.setVisible(is_2d and bool(self.use_x_range))
         self.y_range_box.setVisible(is_2d and bool(self.use_y_range))
@@ -396,7 +423,7 @@ class OWBeamPlot(OWWidget):
         bins = int(self.bins)
         return None if bins <= 0 else bins
 
-    def _color_index(self):
+    def _colormap(self):
         color = int(self.color)
 
         if color < 0:
@@ -405,7 +432,7 @@ class OWBeamPlot(OWWidget):
             color = len(COLOR_MAPS) - 1
 
         self.color = color
-        return color + 1
+        return COLOR_MAPS[color]
 
     @staticmethod
     def _beam_from_shadow_data(shadow_data):
