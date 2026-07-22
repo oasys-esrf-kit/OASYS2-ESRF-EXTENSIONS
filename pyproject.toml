@@ -1,0 +1,126 @@
+# Release memorandum
+# ==================
+#
+# Install the published package from PyPI:
+#
+#     python -m pip install OASYS2-ESRF-EXTENSIONS
+#
+# Install from source for development:
+#
+#     git clone https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS.git
+#     cd OASYS2-ESRF-EXTENSIONS
+#     python -m pip install --editable . --no-deps --no-build-isolation
+#
+# Create and publish a release
+# ----------------------------
+#
+# 1. Update the version in this file and commit all intended changes.
+# 2. Confirm that the working tree contains only the expected changes:
+#
+#     git status
+#
+# 3. Remove artifacts left by previous builds:
+#
+#     rm -rf dist build
+#     find . -name "*.egg-info" -type d -prune -exec rm -rf {} +
+#
+# 4. Install or update the packaging tools:
+#
+#     python -m pip install --upgrade build twine
+#
+# 5. Build both the source distribution and wheel, then validate them:
+#
+#     python -m build
+#     python -m twine check dist/*
+#
+# 6. Inspect the contents of dist/ and upload the validated artifacts:
+#
+#     python -m twine upload dist/*
+#
+# 7. Tag the released commit and push the tag as appropriate for the project.
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OASYS2-ESRF-EXTENSIONS"
+version = "0.0.21"
+description = "oasys2-esrf-extensions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "M Sanchez del Rio", email = "srio@esrf.eu" },
+    { name = "Juan Reyes-Herrera" },
+    { name = "Rafael Celestre" },
+]
+keywords = [
+    "ray tracing",
+    "wave optics",
+    "x-ray optics",
+    "oasys2",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Console",
+    "Environment :: Plugins",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Intended Audience :: Science/Research",
+]
+dependencies = [
+    "oasys2>=0.0.51",
+    "shadow4>=0.1.87",
+    "pandas",
+    "numba",
+    "oasys-barc4ro>=2025.9.9",
+    "barc4shadow>=2026.07.22",
+    "barc4beams>=2026.07.22",
+]
+
+[project.urls]
+Homepage = "https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS"
+Download = "https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS"
+
+[project.entry-points."oasys2.addons"]
+ESRF = "orangecontrib.esrf"
+
+[project.entry-points."oasys2.widgets"]
+"ESRF Oasys" = "orangecontrib.esrf.oasys.widgets.extension"
+"ESRF Syned" = "orangecontrib.esrf.syned.widgets.extension"
+"ESRF XOPPY" = "orangecontrib.esrf.xoppy.widgets.extension"
+"ESRF Shadow4" = "orangecontrib.esrf.shadow4.widgets.extension"
+"ESRF Wofry" = "orangecontrib.esrf.wofry.widgets.extension"
+"ESRF SRW" = "orangecontrib.esrf.srw.widgets.extension"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = [
+    "*.tests",
+    "*.tests.*",
+    "tests.*",
+    "tests",
+]
+
+[tool.setuptools.package-data]
+"orangecontrib.esrf.oasys.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.syned.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.xoppy.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.shadow4.widgets.extension" = [
+    "icons/*.png",
+    "icons/*.jpg",
+    "miscellanea/*.txt",
+]
+"orangecontrib.esrf.wofry.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.srw.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
