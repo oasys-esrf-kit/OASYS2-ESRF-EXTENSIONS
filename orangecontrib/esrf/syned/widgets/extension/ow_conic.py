@@ -371,7 +371,7 @@ class OWConic(OWWidget):
 
 
 
-        self.send("Surface Data",
+        self.Outputs.SurfaceData.send(
                   OasysSurfaceData(xx=x,
                                    yy=y,
                                    zz=Z.T,
