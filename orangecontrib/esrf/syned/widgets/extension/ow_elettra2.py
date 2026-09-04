@@ -448,8 +448,12 @@ class OWELETTRA2(OWWidget):
         self.update()
 
     def update(self):
-        self.check_data()
-        self.update_info()
+        try:
+            self.check_data()
+            self.update_info()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def update_info(self):
 
@@ -650,21 +654,24 @@ Approximated coherent fraction at 1st harmonic:
 
 
     def set_id(self):
+        try:
+            if self.elettra_id_index!=0:
 
-        if self.elettra_id_index!=0:
+                self.populate_magnetic_structure()
+                self.gap_min = self.data_dict["id_minimum_gap_mm"][self.elettra_id_index-1]
+                self.gap_mm = self.data_dict["id_minimum_gap_mm"][self.elettra_id_index-1]
 
-            self.populate_magnetic_structure()
-            self.gap_min = self.data_dict["id_minimum_gap_mm"][self.elettra_id_index-1]
-            self.gap_mm = self.data_dict["id_minimum_gap_mm"][self.elettra_id_index-1]
-
-            if 'LS' in self.data_dict["position"][self.elettra_id_index-1]:
-                self.set_ls_electron_beam()
-            elif 'SS' in self.data_dict["position"][self.elettra_id_index-1]:
-                self.set_ss_electron_beam()
-            else:
-                raise RuntimeError("ERROR: Unable to read source position")
-            self.elettra_bl_index = self.elettra_id_index
-        self.update()
+                if 'LS' in self.data_dict["position"][self.elettra_id_index-1]:
+                    self.set_ls_electron_beam()
+                elif 'SS' in self.data_dict["position"][self.elettra_id_index-1]:
+                    self.set_ss_electron_beam()
+                else:
+                    raise RuntimeError("ERROR: Unable to read source position")
+                self.elettra_bl_index = self.elettra_id_index
+            self.update()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def set_K(self):
         self.update()
@@ -679,30 +686,34 @@ Approximated coherent fraction at 1st harmonic:
         self.set_resonance_energy(BOTH)
 
     def set_resonance_energy(self, which=VERTICAL):
-        congruence.checkStrictlyPositiveNumber(self.auto_energy, "Set Undulator at Energy")
-        congruence.checkStrictlyPositiveNumber(self.auto_harmonic_number, "As Harmonic #")
-        congruence.checkStrictlyPositiveNumber(self.electron_energy_in_GeV, "Energy")
-        congruence.checkStrictlyPositiveNumber(self.period_length, "Period Length")
+        try:
+            congruence.checkStrictlyPositiveNumber(self.auto_energy, "Set Undulator at Energy")
+            congruence.checkStrictlyPositiveNumber(self.auto_harmonic_number, "As Harmonic #")
+            congruence.checkStrictlyPositiveNumber(self.electron_energy_in_GeV, "Energy")
+            congruence.checkStrictlyPositiveNumber(self.period_length, "Period Length")
 
 
-        wavelength = self.auto_harmonic_number*m2ev/self.auto_energy
-        K = round(numpy.sqrt(2*(((wavelength*2*self.gamma()**2)/self.period_length)-1)), 6)
+            wavelength = self.auto_harmonic_number*m2ev/self.auto_energy
+            K = round(numpy.sqrt(2*(((wavelength*2*self.gamma()**2)/self.period_length)-1)), 6)
 
 
-        if which == VERTICAL:
-            self.K_vertical = K
-            self.K_horizontal = 0.0
+            if which == VERTICAL:
+                self.K_vertical = K
+                self.K_horizontal = 0.0
 
-        if which == BOTH:
-            Kboth = round(K / numpy.sqrt(2), 6)
-            self.K_vertical =  Kboth
-            self.K_horizontal = Kboth
+            if which == BOTH:
+                Kboth = round(K / numpy.sqrt(2), 6)
+                self.K_vertical =  Kboth
+                self.K_horizontal = Kboth
 
-        if which == HORIZONTAL:
-            self.K_horizontal = K
-            self.K_vertical = 0.0
+            if which == HORIZONTAL:
+                self.K_horizontal = K
+                self.K_vertical = 0.0
 
-        self.update()
+            self.update()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def gamma(self):
         return 1e9*self.electron_energy_in_GeV / (codata.m_e *  codata.c**2 / codata.e)

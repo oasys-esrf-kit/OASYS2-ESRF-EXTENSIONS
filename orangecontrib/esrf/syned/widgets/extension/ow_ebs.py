@@ -644,10 +644,14 @@ class OWEBS(OWWidget):
         self.update()
 
     def update(self):
-        self.check_data()
-        self.update_info()
-        self.update_plots()
-        self.update_script()
+        try:
+            self.check_data()
+            self.update_info()
+            self.update_plots()
+            self.update_script()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def update_info(self):
 
@@ -897,37 +901,41 @@ class OWEBS(OWWidget):
         self.gap_mm = numpy.round(self.calculate_gap_from_K(), 3)
 
     def set_gap(self, which=VERTICAL):
-        if self.gap_mm < self.gap_min:
-            if ConfirmDialog.confirmed(self, message="Gap is smaller than minimum. Set to minimum?"):
-                self.gap_mm = self.gap_min
+        try:
+            if self.gap_mm < self.gap_min:
+                if ConfirmDialog.confirmed(self, message="Gap is smaller than minimum. Set to minimum?"):
+                    self.gap_mm = self.gap_min
 
-        if self.gap_mm > self.gap_max:
-            if ConfirmDialog.confirmed(self, message="Gap is larger than maximum. Set to maximum?"):
-                self.gap_mm = self.gap_max
+            if self.gap_mm > self.gap_max:
+                if ConfirmDialog.confirmed(self, message="Gap is larger than maximum. Set to maximum?"):
+                    self.gap_mm = self.gap_max
 
-        if self.gap_mm < self.gap_min:
-            raise Exception("Gap is smaller than minimum")
+            if self.gap_mm < self.gap_min:
+                raise Exception("Gap is smaller than minimum")
 
-        if self.gap_mm > self.gap_max:
-            raise Exception("Gap is larger than maximum")
+            if self.gap_mm > self.gap_max:
+                raise Exception("Gap is larger than maximum")
 
-        K = numpy.round(self.calculate_K_from_gap(), 3)
+            K = numpy.round(self.calculate_K_from_gap(), 3)
 
-        if which == VERTICAL:
-            self.K_vertical = K
-            self.K_horizontal = 0.0
+            if which == VERTICAL:
+                self.K_vertical = K
+                self.K_horizontal = 0.0
 
-        if which == BOTH:
-            Kboth = round(K / numpy.sqrt(2), 6)
-            self.K_vertical = Kboth
-            self.K_horizontal = Kboth
+            if which == BOTH:
+                Kboth = round(K / numpy.sqrt(2), 6)
+                self.K_vertical = Kboth
+                self.K_horizontal = Kboth
 
-        if which == HORIZONTAL:
-            self.K_horizontal = K
-            self.K_vertical = 0.0
+            if which == HORIZONTAL:
+                self.K_horizontal = K
+                self.K_vertical = 0.0
 
-        self.populate_settings_after_setting_K()
-        self.update()
+            self.populate_settings_after_setting_K()
+            self.update()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def set_id(self):
         if self.type_of_properties_initial_selection == 6:
@@ -955,44 +963,48 @@ class OWEBS(OWWidget):
         self.set_resonance_energy(BOTH)
 
     def set_resonance_energy(self, which=VERTICAL):
-        congruence.checkStrictlyPositiveNumber(self.auto_energy, "Set Undulator at Energy")
-        congruence.checkStrictlyPositiveNumber(self.auto_harmonic_number, "As Harmonic #")
-        congruence.checkStrictlyPositiveNumber(self.electron_energy_in_GeV, "Energy")
-        congruence.checkStrictlyPositiveNumber(self.period_length, "Period Length")
+        try:
+            congruence.checkStrictlyPositiveNumber(self.auto_energy, "Set Undulator at Energy")
+            congruence.checkStrictlyPositiveNumber(self.auto_harmonic_number, "As Harmonic #")
+            congruence.checkStrictlyPositiveNumber(self.electron_energy_in_GeV, "Energy")
+            congruence.checkStrictlyPositiveNumber(self.period_length, "Period Length")
 
-        wavelength = self.auto_harmonic_number * m2ev / self.auto_energy
-        K = round(numpy.sqrt(2 * (((wavelength * 2 * self.gamma() ** 2) / self.period_length) - 1)), 6)
+            wavelength = self.auto_harmonic_number * m2ev / self.auto_energy
+            K = round(numpy.sqrt(2 * (((wavelength * 2 * self.gamma() ** 2) / self.period_length) - 1)), 6)
 
-        Kmax = self.calculate_K_from_gap(self.gap_min)
-        Kmin = self.calculate_K_from_gap(self.gap_max)
+            Kmax = self.calculate_K_from_gap(self.gap_min)
+            Kmin = self.calculate_K_from_gap(self.gap_max)
 
-        if numpy.isnan(K):
-            if ConfirmDialog.confirmed(self, message="Impossible configuration. Set to Kmin=%f?" % (Kmin)):
-                K = numpy.round(Kmin, 4)
+            if numpy.isnan(K):
+                if ConfirmDialog.confirmed(self, message="Impossible configuration. Set to Kmin=%f?" % (Kmin)):
+                    K = numpy.round(Kmin, 4)
 
-        if (K > Kmax):
-            if ConfirmDialog.confirmed(self, message="Needed K (%f) > Kmax (%f). Reset to Kmax?" % (K, Kmax)):
-                K = numpy.round(Kmax, 4)
+            if (K > Kmax):
+                if ConfirmDialog.confirmed(self, message="Needed K (%f) > Kmax (%f). Reset to Kmax?" % (K, Kmax)):
+                    K = numpy.round(Kmax, 4)
 
-        if (K < Kmin):
-            if ConfirmDialog.confirmed(self, message="Needed K (%f) < Kmin (%f). Reset to Kmin?" % (K, Kmin)):
-                K = numpy.round(Kmin, 4)
+            if (K < Kmin):
+                if ConfirmDialog.confirmed(self, message="Needed K (%f) < Kmin (%f). Reset to Kmin?" % (K, Kmin)):
+                    K = numpy.round(Kmin, 4)
 
-        if which == VERTICAL:
-            self.K_vertical = K
-            self.K_horizontal = 0.0
+            if which == VERTICAL:
+                self.K_vertical = K
+                self.K_horizontal = 0.0
 
-        if which == BOTH:
-            Kboth = round(K / numpy.sqrt(2), 6)
-            self.K_vertical = Kboth
-            self.K_horizontal = Kboth
+            if which == BOTH:
+                Kboth = round(K / numpy.sqrt(2), 6)
+                self.K_vertical = Kboth
+                self.K_horizontal = Kboth
 
-        if which == HORIZONTAL:
-            self.K_horizontal = K
-            self.K_vertical = 0.0
+            if which == HORIZONTAL:
+                self.K_horizontal = K
+                self.K_vertical = 0.0
 
-        self.populate_settings_after_setting_K()
-        self.update()
+            self.populate_settings_after_setting_K()
+            self.update()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception.args[0]) if len(exception.args) else str(exception), QMessageBox.Ok)
+            if self.IS_DEVELOP: raise exception
 
     def plot_graph(self, plot_canvas_index, curve_name, x_values, y_values, xtitle="", ytitle="",
                    color='blue', replace=True):
