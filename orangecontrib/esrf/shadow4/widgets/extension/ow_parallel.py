@@ -8,6 +8,7 @@ import time
 import uuid
 
 import joblib
+from AnyQt.QtWidgets import QApplication
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Input, Output
@@ -176,6 +177,8 @@ class OWParallel(OWWidget):
         self.setStatusMessage("")
         self.Outputs.shadow_data.send(None)
         self.run_output.setText("")
+        self.setStatusMessage("Running...")
+        QApplication.processEvents()  # repaint the cleared log before the blocking run
 
         stream = io.StringIO()
         progress_started = False
@@ -211,8 +214,42 @@ class OWParallel(OWWidget):
             if progress_started:
                 self.progressBarFinished()
 
+    @staticmethod
+    def _use_console_python_for_workers():
+        # When OASYS is started from the desktop icon, sys.executable is pythonw.exe, which has no
+        # stdio handles; loky workers spawned with it die ("worker process ... unexpectedly terminated").
+        if sys.platform != "win32":
+            return
+        exe = pathlib.Path(sys.executable)
+        if exe.name.lower() != "pythonw.exe":
+            return
+        python_exe = exe.with_name("python.exe")
+        if python_exe.exists():
+            from joblib.externals.loky.backend import popen_loky_win32, resource_tracker, spawn
+            spawn._python_exe = str(python_exe)
+
+            # python.exe is a console program: hide the console window of each worker.
+            import types
+            import _winapi
+            CREATE_NO_WINDOW = 0x08000000
+
+            def create_process(*args):
+                args = list(args)
+                args[5] |= CREATE_NO_WINDOW
+                return _winapi.CreateProcess(*args)
+
+            # loky starts the workers (popen_loky_win32) and its resource tracker (resource_tracker)
+            # with separate CreateProcess calls.
+            for module in (popen_loky_win32, resource_tracker):
+                if not hasattr(module._winapi, "_oasys_patched"):
+                    attributes = {k: getattr(_winapi, k) for k in dir(_winapi) if not k.startswith("__")}
+                    attributes["CreateProcess"] = create_process
+                    attributes["_oasys_patched"] = True
+                    module._winapi = types.SimpleNamespace(**attributes)
+
     def _run(self, number_of_repetitions, number_of_rays, n_jobs):
         t_total = time.perf_counter()
+        self._use_console_python_for_workers()
 
         self.progressBarSet(10)
         runner_path = self._temporary_runner_script_path()
@@ -378,3 +415,47 @@ class OWParallel(OWWidget):
 
 
 add_widget_parameters_to_module(__name__)
+
+if __name__ == "__main__":
+    import sys
+    from shadow4.beamline.s4_beamline import S4Beamline
+    from shadow4.sources.source_geometrical.source_geometrical import SourceGeometrical
+    from orangecontrib.shadow4.util.shadow4_objects import ShadowData
+    def get_test_beam(seed=5676561, nrays=1000):
+        beam, footprint = None, None
+
+        import numpy as np
+        from dabax.dabax_xraylib import DabaxXraylib
+        from shadow4.beamline.s4_beamline import S4Beamline
+
+        beamline = S4Beamline()
+
+        #
+        #
+        #
+        from shadow4.sources.source_geometrical.source_geometrical import SourceGeometrical
+        light_source = SourceGeometrical(name='Geometrical Source', nrays=nrays, seed=seed)
+        light_source.set_spatial_type_point()
+        light_source.set_depth_distribution_off()
+        light_source.set_angular_distribution_flat(hdiv1=-0, hdiv2=0, vdiv1=-0, vdiv2=0)
+        light_source.set_energy_distribution_singleline(10000, unit='eV')
+        light_source.set_polarization(polarization_degree=1, phase_diff=0, coherent_beam=1)
+
+        beam = light_source.get_beam()
+
+        beamline.set_light_source(light_source)
+
+        # if beam is not None:
+        #     beam.clean_lost_rays()
+        # if footprint is not None:
+        #     footprint.clean_lost_rays()
+
+        return ShadowData(beam=beam, beamline=S4Beamline(light_source=light_source))
+
+    from AnyQt.QtWidgets import QApplication
+    a = QApplication(sys.argv)
+    ow = OWParallel()
+    ow.set_shadow_data(get_test_beam())
+    ow.show()
+    a.exec()
+    ow.saveSettings()
