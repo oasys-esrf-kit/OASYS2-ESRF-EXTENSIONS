@@ -1,0 +1,99 @@
+# Copyright (c) 2025 European Synchrotron Radiation Facility
+# Licensed under the MIT license (see LICENSE).
+
+# Memorandum:
+#
+# Install from sources (developer / editable):
+#     git clone https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS
+#     cd OASYS2-ESRF-EXTENSIONS
+#     python -m pip install -e . --no-deps --no-build-isolation
+#     # NOTE: use --no-build-isolation, NOT --no-binary :all:. The latter forces an
+#     # isolated source build that writes a setuptools wheel to the pip cache and
+#     # fails with "[Errno 13] Permission denied: ...\pip\cache\wheels\..." .
+#
+# Upload to pypi (when uploading, increment the version number):
+#     # use python > 3.10, pip > 25.2 (packages needed: build, twine)
+#     rm -rf dist
+#     python -m build          # builds BOTH the sdist and the wheel
+#     python -m twine upload dist/*
+#
+# Install from pypi:
+#     pip install OASYS2-ESRF-EXTENSIONS
+
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "OASYS2-ESRF-EXTENSIONS"
+version = "0.0.23"
+description = "oasys2-esrf-extensions"
+readme = "README.md"
+
+license = "MIT"
+license-files = ["LICENSE"]
+
+authors = [
+    { name = "M Sanchez del Rio", email = "srio@esrf.eu" },
+    { name = "Juan Reyes-Herrera" },
+    { name = "Rafael Celestre" },
+]
+keywords = [
+    "ray tracing",
+    "wave optics",
+    "x-ray optics",
+    "oasys2",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Console",
+    "Environment :: Plugins",
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+]
+dependencies = [
+    "oasys2>=0.0.61",
+    "shadow4>=0.2.0",
+    "pandas",
+    "numba",
+    "oasys-barc4ro>=2026.7.16",
+    "barc4shadow>=2026.7.22",
+    "barc4beams>=2026.7.22",
+    # "spectrum-builder>=1.0.5",     # to be added in the future, now install manually
+    # "accelerator-toolbox==0.6.1",  # in stand-by, gives problems in windows
+]
+
+[project.urls]
+Homepage = "https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS"
+Download = "https://github.com/oasys-esrf-kit/OASYS2-ESRF-EXTENSIONS"
+
+[project.entry-points."oasys2.addons"]
+ESRF = "orangecontrib.esrf"
+
+[project.entry-points."oasys2.widgets"]
+"ESRF Oasys" = "orangecontrib.esrf.oasys.widgets.extension"
+"ESRF Syned" = "orangecontrib.esrf.syned.widgets.extension"
+"ESRF XOPPY" = "orangecontrib.esrf.xoppy.widgets.extension"
+"ESRF Shadow4" = "orangecontrib.esrf.shadow4.widgets.extension"
+"ESRF Wofry" = "orangecontrib.esrf.wofry.widgets.extension"
+"ESRF SRW" = "orangecontrib.esrf.srw.widgets.extension"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+exclude = ["*.tests", "*.tests.*", "tests.*", "tests"]
+# namespaces = false replicates the old find_packages() behaviour exactly.
+# Under pyproject.toml, setuptools DEFAULTS this to true (= find_namespace_packages),
+# which would sweep in non-package dirs such as .../icons.
+namespaces = false
+
+[tool.setuptools.package-data]
+"orangecontrib.esrf.oasys.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.syned.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.xoppy.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.shadow4.widgets.extension" = ["icons/*.png", "icons/*.jpg", "miscellanea/*.txt"]
+"orangecontrib.esrf.wofry.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
+"orangecontrib.esrf.srw.widgets.extension" = ["icons/*.png", "icons/*.jpg"]
