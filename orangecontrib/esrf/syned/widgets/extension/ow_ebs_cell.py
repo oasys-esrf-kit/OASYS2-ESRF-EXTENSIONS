@@ -14,10 +14,6 @@ from orangewidget.widget import Output
 
 from oasys2.widget.widget import OWWidget
 from oasys2.widget import gui as oasysgui
-from oasys2.widget.util import congruence
-
-from oasys2.widget.widget import OWAction
-from oasys2.widget.gui import MessageDialog, ConfirmDialog
 
 import orangecanvas.resources as resources
 
@@ -34,11 +30,6 @@ except:
 from oasys2.widget.util.widget_util import EmittingStream
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
-
-VERTICAL = 1
-HORIZONTAL = 2
-BOTH = 3
-
 
 
 def get_electron_beam_parameters_from_at(r0=AT_LATTICE, id_number=1, s_locs=None, npoints=10, verbose=False):
@@ -111,7 +102,8 @@ def get_electron_beam_parameters_from_at(r0=AT_LATTICE, id_number=1, s_locs=None
     labels = ['s0', 's', 'lab_x', 'lab_y', 'angle', 'alphaX', 'alphaY', 'betaX', 'betaY', 'gammaX', 'gammaY', 'etaX', 'etaY', 'etaXp', 'etaYp',
               'xx', 'yy', 'xxp', 'yyp', 'xpxp', 'ypyp', 'sigma x', 'sigma y', "sigma x'", "sigma y'", "<x * x'>", "<y * y'>"]
 
-    return numpy.array(data), epsilonX, epsilonY, labels, s0
+    # delta: relative energy spread (sigma_e) from the lattice envelope parameters
+    return numpy.array(data), epsilonX, epsilonY, labels, s0, delta
 
 class OWEBSCELL(OWWidget):
 
@@ -144,6 +136,7 @@ class OWEBSCELL(OWWidget):
 
     data = None
     values_at_undulator_center = None
+    energy_spread = None
 
     def __init__(self):
         super().__init__()
@@ -243,10 +236,10 @@ class OWEBSCELL(OWWidget):
         return self.ebs_id_index + 1
 
     def update_cell_file(self):
-        pass
+        self.refresh()
 
     def set_id(self):
-        pass
+        self.refresh()
 
     def plot_graph(self, plot_canvas_index, curve_name, x_values, y_values, xtitle="", ytitle="", color='blue', replace=True):
         self.plot_canvas[plot_canvas_index].addCurve(x_values, y_values, curve_name, symbol='', color=color, replace=replace)
@@ -281,38 +274,44 @@ class OWEBSCELL(OWWidget):
         self.info_id.ensureCursorVisible()
 
     def refresh(self):
-
-        try:
-            assert(AT_LATTICE is not None)
-        except Exception as exception:
+        if AT_LATTICE is None:
             QMessageBox.critical(self, "Error", "Wrong AT_LATTICE:\nDid you pip install accelerator-toolbox?",
-                                 QMessageBox.Ok)
-            if self.IS_DEVELOP: raise exception
-            return
-
-
-        n_id = self.get_id_number()
-
-        try:
-            self.data, epsilonX, epsilonY, labels, s0 = get_electron_beam_parameters_from_at(id_number=n_id, npoints=self.number_of_points, verbose=True)
-        except Exception as exception:
-            MessageDialog.message(self, str(exception), "Exception occurred in OASYS", "critical")
+                                 QMessageBox.StandardButton.Ok)
             return
 
         self.info_id.setText("")
+        old_stdout = sys.stdout
         sys.stdout = EmittingStream(textWritten=self.writeStdOut)
+        try:
+            self._refresh()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.StandardButton.Ok)
+            if self.IS_DEVELOP: raise exception
+        finally:
+            sys.stdout = old_stdout
+
+    def _refresh(self):
+        if self.number_of_points < 1:
+            raise Exception("Number of points in a cell must be at least 1")
+
+        n_id = self.get_id_number()
+
+        self.data, epsilonX, epsilonY, labels, s0, self.energy_spread = get_electron_beam_parameters_from_at(
+            id_number=n_id, npoints=self.number_of_points, verbose=True)
 
         print("\n\nValues calculated using the Accelerator Toolbox https://github.com/atcollab/at")
         print(f"with file {lattice_file}\n")
         print(f"\n============== data for cell sector ID{n_id:02d} ================\n")
         print(f"epsilon_x = {epsilonX:.3g} m.rad")
-        print(f"epsilon_y = {epsilonY:.3g} m.rad\n\n")
+        print(f"epsilon_y = {epsilonY:.3g} m.rad")
+        print(f"energy spread (sigma_e) = {self.energy_spread:.4g}\n\n")
 
         print(f"============== data at center of the straight section (s={s0:.6f} m)")
         for i, label in enumerate(labels):
             print(f"{label} = {self.data[0, i]:.5g}")
 
-        self.values_at_undulator_center, epsilonX, epsilonY, labels, s0 = get_electron_beam_parameters_from_at(id_number=n_id, s_locs=[s0 + self.shift_from_center_of_straight_section], npoints=1, verbose=True)
+        self.values_at_undulator_center, epsilonX, epsilonY, labels, s0, _ = get_electron_beam_parameters_from_at(
+            id_number=n_id, s_locs=[s0 + self.shift_from_center_of_straight_section], npoints=1, verbose=True)
 
         print("\n\n============== data at undulator center at %.3f m from center of the straight section\n" % self.shift_from_center_of_straight_section)
         for i, label in enumerate(labels):
@@ -320,19 +319,16 @@ class OWEBSCELL(OWWidget):
 
         self.update_plots()
 
-        try:
-            self.Outputs.SynedData.send(
-                Beamline(light_source=LightSource(
-                    name="EBS data",
-                    electron_beam=self.get_electron_beam(),
-                    magnetic_structure=None)))
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e.args[0]), QMessageBox.StandardButton.Ok)
+        self.Outputs.SynedData.send(
+            Beamline(light_source=LightSource(
+                name="EBS data",
+                electron_beam=self.get_electron_beam(),
+                magnetic_structure=None)))
 
     def get_electron_beam(self):
         return ElectronBeam(
             energy_in_GeV=6.0,
-            energy_spread=0.001,
+            energy_spread=self.energy_spread,  # sigma_e from the AT lattice
             current=0.2,
             number_of_bunches=0,
             moment_xx=self.values_at_undulator_center[0, 15],
@@ -342,13 +338,6 @@ class OWEBSCELL(OWWidget):
             moment_yyp=self.values_at_undulator_center[0, 18],
             moment_ypyp=self.values_at_undulator_center[0, 20],
         )
-
-    def callResetSettings(self):
-        if ConfirmDialog.confirmed(parent=self, message="Confirm Reset of the Fields?"):
-            try:
-                self.resetSettings()
-            except Exception:
-                pass
 
 add_widget_parameters_to_module(__name__)
 
