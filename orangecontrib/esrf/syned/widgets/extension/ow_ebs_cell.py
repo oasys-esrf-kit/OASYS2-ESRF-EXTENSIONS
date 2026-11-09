@@ -1,4 +1,5 @@
 import os, sys
+import inspect
 import numpy
 
 from syned.storage_ring.light_source import LightSource, ElectronBeam
@@ -28,6 +29,8 @@ except:
 
 
 from oasys2.widget.util.widget_util import EmittingStream
+
+from orangecontrib.esrf.util.python_script import PythonScript
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
@@ -188,6 +191,7 @@ class OWEBSCELL(OWWidget):
 
         gui.rubber(self.controlArea)
         self.initializeTabs()
+        self.update_script()
 
     def get_id_list(self):
         return [f"ID{i:02d}" for i in range(1, 33)]
@@ -210,14 +214,21 @@ class OWEBSCELL(OWWidget):
             self.tab.append(oasysgui.createTabPage(self.tabs, self.titles()[i]))
 
         self.tab.append(oasysgui.createTabPage(self.tabs, "Info"))
+        self.tab.append(oasysgui.createTabPage(self.tabs, "Script"))
 
         for tab in self.tab:
             tab.setFixedHeight(self.IMAGE_HEIGHT)
             tab.setFixedWidth(self.IMAGE_WIDTH)
 
         self.info_id = oasysgui.textArea(height=self.IMAGE_HEIGHT - 5, width=self.IMAGE_WIDTH - 5)
-        profile_box = oasysgui.widgetBox(self.tab[-1], "", addSpace=True, orientation="horizontal", height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH - 5)
+        profile_box = oasysgui.widgetBox(self.tab[n_plots], "", addSpace=True, orientation="horizontal", height=self.IMAGE_HEIGHT, width=self.IMAGE_WIDTH - 5)
         profile_box.layout().addWidget(self.info_id)
+
+        # script widget
+        self.python_script = PythonScript()
+        self.python_script.code_area.setFixedHeight(400)
+        script_box = gui.widgetBox(self.tab[n_plots + 1], "Python script", addSpace=True, orientation="horizontal")
+        script_box.layout().addWidget(self.python_script)
 
         self.plot_canvas = [oasysgui.plotWindow(roi=False, control=False, position=True) for _ in range(n_plots)]
 
@@ -294,6 +305,8 @@ class OWEBSCELL(OWWidget):
         if self.number_of_points < 1:
             raise Exception("Number of points in a cell must be at least 1")
 
+        self.update_script()
+
         n_id = self.get_id_number()
 
         self.data, epsilonX, epsilonY, labels, s0, self.energy_spread = get_electron_beam_parameters_from_at(
@@ -324,6 +337,84 @@ class OWEBSCELL(OWWidget):
                 name="EBS data",
                 electron_beam=self.get_electron_beam(),
                 magnetic_structure=None)))
+
+    def update_script(self):
+        # Python script reproducing the calculation done in _refresh(). The AT function is embedded
+        # from its source, so the script always matches the widget.
+        n_plots = len(self.titles())
+        plots_txt = ""
+        for iplot, (ix, iy) in enumerate([[7, 8], [5, 6], [11, 12], [21, 22], [23, 24]]):
+            title = self.titles()[iplot]
+            plots_txt += 'plot(data[:, 0], data[:, %d], data[:, 0], data[:, %d], legend=["%s X", "%s Y"], color=["black", "red"],\n' \
+                         '     title="%s", xtitle="%s", ytitle="%s", show=%d)\n' % \
+                         (ix, iy, title, title, title, self.xtitles()[iplot], self.ytitles()[iplot], iplot == n_plots - 1)
+
+        script = """
+import numpy
+import at  # accelerator toolbox
+from syned.storage_ring.light_source import ElectronBeam
+from srxraylib.plot.gol import plot
+
+#
+# inputs
+#
+lattice_file = %r
+id_number    = %d # cell of ID%02d
+number_of_points = %d # points in a cell (for plots)
+shift_from_center_of_straight_section = %r # undulator center from straight section center [m]
+
+AT_LATTICE = at.load_lattice(lattice_file)
+
+#
+# electron beam parameters along the cell, from the AT lattice
+#
+""" % (lattice_file, self.get_id_number(), self.get_id_number(), self.number_of_points,
+       float(self.shift_from_center_of_straight_section))
+
+        script += inspect.getsource(get_electron_beam_parameters_from_at)
+
+        script += """
+data, epsilonX, epsilonY, labels, s0, energy_spread = get_electron_beam_parameters_from_at(
+    r0=AT_LATTICE, id_number=id_number, npoints=number_of_points, verbose=True)
+
+print("epsilon_x = %.3g m.rad" % epsilonX)
+print("epsilon_y = %.3g m.rad" % epsilonY)
+print("energy spread (sigma_e) = %.4g" % energy_spread)
+
+print("\\n============== data at center of the straight section (s=%.6f m)" % s0)
+for i, label in enumerate(labels):
+    print("%s = %.5g" % (label, data[0, i]))
+
+values_at_undulator_center, epsilonX, epsilonY, labels, s0, _ = get_electron_beam_parameters_from_at(
+    r0=AT_LATTICE, id_number=id_number, s_locs=[s0 + shift_from_center_of_straight_section], npoints=1, verbose=True)
+
+print("\\n============== data at undulator center at %.3f m from center of the straight section" % shift_from_center_of_straight_section)
+for i, label in enumerate(labels):
+    print("%s = %.5g" % (label, values_at_undulator_center[0, i]))
+
+#
+# syned electron beam at the undulator center (as sent by the widget)
+#
+electron_beam = ElectronBeam(
+    energy_in_GeV=6.0,
+    energy_spread=energy_spread,  # sigma_e from the AT lattice
+    current=0.2,
+    number_of_bunches=0,
+    moment_xx=values_at_undulator_center[0, 15],
+    moment_xxp=values_at_undulator_center[0, 17],
+    moment_xpxp=values_at_undulator_center[0, 19],
+    moment_yy=values_at_undulator_center[0, 16],
+    moment_yyp=values_at_undulator_center[0, 18],
+    moment_ypyp=values_at_undulator_center[0, 20],
+)
+print(electron_beam.info())
+
+#
+# plots along the cell (s measured from the straight section center)
+#
+""" + plots_txt
+
+        self.python_script.set_code(script)
 
     def get_electron_beam(self):
         return ElectronBeam(
