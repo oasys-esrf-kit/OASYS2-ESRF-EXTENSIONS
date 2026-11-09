@@ -1,16 +1,14 @@
+import os
 import numpy
 
 from scipy import interpolate
 from scipy import spatial
-from scipy.interpolate import interp2d, RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline
 
-import matplotlib.pylab as plt
 import matplotlib as mpl
-
-from srxraylib.plot.gol import plot_image, set_qt, plot
-
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+
+from srxraylib.plot.gol import plot_image
 
 from oasys2.widget.util.widget_util import write_surface_file
 from oasys2.widget.util import congruence
@@ -18,13 +16,7 @@ import oasys2.widget.util.widget_util as OU
 
 
 def write_generic_h5_surface(s, xx, yy, filename='presurface.hdf5',subgroup_name="surface_file"):
-    # import h5py
-    # file = h5py.File(filename, 'w')
-    # file[subgroup_name + "/X"] = xx
-    # file[subgroup_name + "/Y"] = yy
-    # file[subgroup_name + "/Z"] = s.T
-    # file.close()
-    # print("write_h5_surface: File for OASYS " + filename + " written to disk.")
+    # s is s[ix, iy], shape (len(xx), len(yy)); the OASYS h5 file stores the transposed array
     write_surface_file(s.T, xx, yy, filename, overwrite=True)
     print("write_h5_surface: File for OASYS " + filename + " written to disk.")
 
@@ -74,12 +66,9 @@ class FEA_File():
         if do_plot:
             o1.plot_triangulation()
 
-        o1.interpolate(n_axis_0, n_axis_1)
+        o1.interpolate_grid(n_axis_0, n_axis_1)
         if do_plot:
             o1.plot_interpolated()
-
-        if o1.does_interpolated_have_nan():
-            o1.remove_borders_in_interpolated_data()
 
         if do_plot:
             o1.plot_surface_image()
@@ -92,7 +81,7 @@ class FEA_File():
             o1.detrend_straight_line(axis=1)
         elif detrend == 3:
             o1.detrend_best_circle(axis=0)
-        elif detrend == 5:
+        elif detrend == 4:
             o1.detrend_best_circle(axis=1)
 
         # o1.reset_height_to_minimum()
@@ -146,48 +135,44 @@ class FEA_File():
 
         elif file_in_type == 2: # HDF5 Oasys surface file
 
-            if self.filename[0:4] == "http" or self.filename[0:3] == "ftp":
+            downloaded = self.filename[0:4] == "http" or self.filename[0:3] == "ftp"
+            if downloaded:
                 import urllib.request
                 filehandle, _ = urllib.request.urlretrieve(self.filename)
-                print("Reading local file doenloaded from url: %s" % filehandle)
+                print("Reading local file downloaded from url: %s" % filehandle)
             else:
                 filehandle = self.filename
 
-            self.surface_file_name = congruence.checkDir(filehandle)
-            # if not os.path.isfile(file_name): raise ValueError("File " + file_name + " not existing")
-            # import h5py
-            # file = h5py.File(filehandle, 'r')
-            # xx = file["surface_file" + "/X"][()]
-            # yy = file["surface_file" + "/Y"][()]
-            # zz = file["surface_file" + "/Z"][()]
-            # file.close()
-            # return xx.copy(), yy.copy(), zz.copy()
-
-            xx, yy, zz = OU.read_surface_file(filehandle)
-
-
-            ZZ = zz.copy().T
-            XX = numpy.outer(xx, numpy.ones_like(yy))
-            YY = numpy.outer(numpy.ones_like(xx), yy)
-
-            # Coordinates
-
-
-            self.Xdeformation = factorX * XX.flatten()  # X=x in m
-            self.Ydeformation = factorY * YY.flatten()  # Y=z in m
-            self.Zdeformation = factorZ * ZZ.flatten()  # Z=uy vertical displacement in m
-
-            self.Xundeformed = numpy.zeros_like(self.Xdeformation) # factorX * XX.flatten() * 0.0 # X=x in m
-            self.Yundeformed = numpy.zeros_like(self.Ydeformation) # factorY * YY.flatten() * 0.0 # Y=z in m
-            self.Zundeformed = numpy.zeros_like(self.Zdeformation) # factorZ * ZZ.flatten() * 0.0  # Z=uy vertical displacement in m
+            try:
+                self.surface_file_name = congruence.checkDir(filehandle)
+                xx, yy, zz = OU.read_surface_file(filehandle)
+            finally:
+                if downloaded:  # remove the temporary copy
+                    try: os.remove(filehandle)
+                    except OSError: pass
 
             #
             # this file type does not need interpolation as it comes in a regular grid
+            # (file Z[iy, ix] -> internal Z_INTERPOLATED[ix, iy])
             #
-
             self.x_interpolated = factorX * xx
             self.y_interpolated = factorY * yy
-            self.Z_INTERPOLATED = factorZ * ZZ
+            self.Z_INTERPOLATED = factorZ * zz.copy().T
+
+            self._set_points_from_grid()
+
+    def _set_points_from_grid(self):
+        # point arrays (used for limits, raw-data plots, ...) from the regular grid (OASYS surface file)
+        XX = numpy.outer(self.x_interpolated, numpy.ones_like(self.y_interpolated))
+        YY = numpy.outer(numpy.ones_like(self.x_interpolated), self.y_interpolated)
+
+        self.Xdeformation = XX.flatten()  # X=x in m
+        self.Ydeformation = YY.flatten()  # Y=z in m
+        self.Zdeformation = self.Z_INTERPOLATED.flatten()  # Z=uy vertical displacement in m
+
+        self.Xundeformed = numpy.zeros_like(self.Xdeformation)
+        self.Yundeformed = numpy.zeros_like(self.Ydeformation)
+        self.Zundeformed = numpy.zeros_like(self.Zdeformation)
 
     def Xdeformed(self):
         return self.Xundeformed + self.Xdeformation
@@ -209,31 +194,16 @@ class FEA_File():
         return self.Xdeformation,self.Ydeformation,self.Zdeformation
 
     def get_limits_undeformed(self):
-
-        print("X undeformed limits: ", self.Xundeformed.min(), self.Xundeformed.max())
-        print("Y undeformed limits: ", self.Yundeformed.min(), self.Yundeformed.max())
-        print("Z undeformed limits: ", self.Zundeformed.min(), self.Zundeformed.max())
-
         return self.Xundeformed.min(), self.Xundeformed.max(), \
                self.Yundeformed.min(), self.Yundeformed.max(), \
                self.Zundeformed.min(), self.Zundeformed.max()
 
     def get_limits_deformation(self):
-
-        print("Xdeformation limits: ", self.Xdeformation.min(), self.Xdeformation.max())
-        print("Ydeformation limits: ", self.Ydeformation.min(), self.Ydeformation.max())
-        print("Zdeformation limits: ", self.Zdeformation.min(), self.Zdeformation.max())
-
         return self.Xdeformation.min(), self.Xdeformation.max(), \
                self.Ydeformation.min(), self.Ydeformation.max(), \
                self.Zdeformation.min(), self.Zdeformation.max()
 
     def get_limits_deformed(self):
-
-        print("X deformed limits: ", self.Xdeformed().min(), self.Xdeformed().max())
-        print("Y deformed limits: ", self.Ydeformed().min(), self.Ydeformed().max())
-        print("Z deformed limits: ", self.Zdeformed().min(), self.Zdeformed().max())
-
         return self.Xdeformed().min(), self.Xdeformed().max(), \
                self.Ydeformed().min(), self.Ydeformed().max(), \
                self.Zdeformed().min(), self.Zdeformed().max()
@@ -245,7 +215,14 @@ class FEA_File():
 
         if flag == 0: # nothing
             return
-        elif flag == 1: # axis 0
+
+        if self.file_in_type == 2: # OASYS surface file: mirror the regular grid
+            if flag in (1, 3): self._mirror_grid(axis=0)
+            if flag in (2, 3): self._mirror_grid(axis=1)
+            self._set_points_from_grid()
+            return
+
+        if flag == 1: # axis 0
             self.Xundeformed = numpy.concatenate((-self.Xundeformed, self.Xundeformed))
             self.Yundeformed = numpy.concatenate((self.Yundeformed, self.Yundeformed))
             self.Zundeformed = numpy.concatenate((self.Zundeformed, self.Zundeformed))
@@ -275,12 +252,43 @@ class FEA_File():
             self.Zdeformation = numpy.concatenate((self.Zdeformation, self.Zdeformation))
 
 
-    def triangulate(self):
-        # triangulation
+    def _mirror_grid(self, axis=0):
+        # Mirror the regular grid with respect to coordinate 0 along the given axis (keeping the heights),
+        # as replicate_raw_data() does for point clouds. The data must lie on one side of 0 along that axis.
+        coor = self.x_interpolated if axis == 0 else self.y_interpolated
+        name = "axis 0 (X)" if axis == 0 else "axis 1 (Y)"
+        if coor.min() < 0 < coor.max():
+            raise Exception("Replicate along %s: the data must lie on one side of 0 (found [%g, %g])" %
+                            (name, coor.min(), coor.max()))
+
+        Z = self.Z_INTERPOLATED
+        if coor[0] > coor[-1]: # make the coordinate increasing
+            coor = coor[::-1]
+            Z = numpy.flip(Z, axis=axis)
+
+        if coor.max() <= 0:   # data on the negative side: mirror to the positive side
+            keep = slice(None, -1) if coor[-1] == 0 else slice(None)   # do not duplicate the 0 line
+            new_coor = numpy.concatenate((coor, -coor[keep][::-1]))
+            new_Z = numpy.concatenate((Z, numpy.flip(numpy.take(Z, numpy.arange(coor.size)[keep], axis=axis), axis=axis)), axis=axis)
+        else:                 # data on the positive side: mirror to the negative side
+            keep = slice(1, None) if coor[0] == 0 else slice(None)
+            new_coor = numpy.concatenate((-coor[keep][::-1], coor))
+            new_Z = numpy.concatenate((numpy.flip(numpy.take(Z, numpy.arange(coor.size)[keep], axis=axis), axis=axis), Z), axis=axis)
+
+        if axis == 0: self.x_interpolated = new_coor
+        else:         self.y_interpolated = new_coor
+        self.Z_INTERPOLATED = new_Z
+
+    def triangulate(self, force=False):
+        # OASYS h5 files come on a regular grid: the triangulation is not used (and is slow for large grids)
+        if self.file_in_type == 2 and not force:
+            print("Regular grid (OASYS surface file): triangulation not needed, skipped.")
+            return
         self.triPi = numpy.array([self.Xdeformed(), self.Ydeformed()]).transpose()
         self.tri = spatial.Delaunay(self.triPi)
 
     def plot_triangulation(self,show=True):
+        if self.tri is None: self.triangulate(force=True)
         fig = plt.figure()
         plt.triplot(self.Xdeformed(), self.Ydeformed() , self.tri.simplices.copy())
         plt.plot(self.Xdeformed(), self.Ydeformed(), "or", label = "Data")
@@ -299,6 +307,25 @@ class FEA_File():
     def get_Yinterpolated_mesh(self):
         return numpy.outer(numpy.ones_like(self.x_interpolated),self.y_interpolated)
 
+
+    def interpolate_grid(self, nx, ny, remove_nan=0):
+        """
+        Interpolates to a centred grid of exactly nx x ny points (recommended entry point).
+
+        Point clouds: interpolates on nx+2 x ny+2 points over the data limits and removes one point on each
+        side (the rim is where the interpolation is less reliable or NaN).
+        OASYS surface files: interpolates on nx x ny points (no interpolation if nx or ny <= 0); the borders
+        are removed only if the file itself contains NaNs.
+
+        :param remove_nan: 0=No, 1=Yes (replace with minimum height) 2=Yes (replace with 0)
+        """
+        if self.file_in_type == 2:
+            self.interpolate(nx, ny, remove_nan=remove_nan)
+            if self.does_interpolated_have_nan():
+                self.remove_borders_in_interpolated_data()
+        else:
+            self.interpolate(nx + 2, ny + 2, remove_nan=remove_nan)
+            self.remove_borders_in_interpolated_data()
 
     def interpolate(self,nx,ny,remove_nan=0):
         """
@@ -326,7 +353,7 @@ class FEA_File():
                              self.Z_INTERPOLATED)
                 Z_INTERPOLATED = f(x_interpolated, y_interpolated)
 
-                print("original dimensions f0r interpolation", self.Z_INTERPOLATED.shape)
+                print("original dimensions for interpolation", self.Z_INTERPOLATED.shape)
 
                 print("interpolated dimensions", Z_INTERPOLATED.shape)
 
@@ -344,6 +371,7 @@ class FEA_File():
                 self.triangulate()
 
             lim = self.get_limits_deformed()
+            print("interpolation limits: xmin, xmax, ymin, ymax", lim[0:4])
             self.x_interpolated = numpy.linspace(lim[0],lim[1],nx)
             self.y_interpolated = numpy.linspace(lim[2],lim[3],ny)
 
@@ -390,11 +418,14 @@ class FEA_File():
         return numpy.isnan(self.Z_INTERPOLATED).sum() > 0
 
     def remove_borders_in_interpolated_data(self):
-        self.x_interpolated = self.x_interpolated[1:-2].copy()
-        self.y_interpolated = self.y_interpolated[1:-2].copy()
-        self.Z_INTERPOLATED = self.Z_INTERPOLATED[1:-2,1:-2].copy()
+        # remove one point on each side (keeps the grid centred)
+        self.x_interpolated = self.x_interpolated[1:-1].copy()
+        self.y_interpolated = self.y_interpolated[1:-1].copy()
+        self.Z_INTERPOLATED = self.Z_INTERPOLATED[1:-1,1:-1].copy()
 
     def detrend_straight_line(self,axis=0,fitting_domain_ratio=0.5):
+        # fitting_domain_ratio: the fit uses the points with |coordinate| <= fitting_domain_ratio [m]
+        #                       (same meaning as in detrend_best_circle)
         if axis == 0:
             xm = self.x_interpolated.copy()
             zm = self.Z_INTERPOLATED[:,self.y_interpolated.size//2]
@@ -404,7 +435,7 @@ class FEA_File():
 
         zm.shape = -1
 
-        icut = numpy.argwhere( numpy.abs(xm) < (numpy.max((-xm[0],xm[-1])) * fitting_domain_ratio))
+        icut = numpy.argwhere(numpy.abs(xm) <= fitting_domain_ratio)
         if len(icut) <=5:
             raise Exception("Not enough points for fitting.")
 
@@ -416,14 +447,13 @@ class FEA_File():
 
         # plot(xcut, zmcut, xm, zm, legend=["cut", "original"])
 
-        print( numpy.argwhere(numpy.isnan(self.Z_INTERPOLATED)) )
         print("Fitting interval: [%g,%g]" % (xcut[0],xcut[-1]))
 
         coeff = numpy.polyfit(xcut.copy(), zmcut.copy(), deg=1)
 
         zfit = coeff[0] * xm  + coeff[1]
 
-        print("Detrending straight line (axis=%d): zfit = %g * coordinate + %g " % (axis, coeff[1], coeff[0]))
+        print("Detrending straight line (axis=%d): zfit = %g * coordinate + %g " % (axis, coeff[0], coeff[1]))
 
         # plot(xcut, zmcut, xm, zfit, legend=["data","fit"])
         # plot(xcut, zmcut, xm, zfit, legend=["cut","fit"],yrange=[-0.000015,0.000005])
@@ -436,6 +466,7 @@ class FEA_File():
                 self.Z_INTERPOLATED[i,:] -= zfit
 
     def detrend_best_circle(self,axis=0,fitting_domain_ratio=0.5):
+        # fitting_domain_ratio: the fit uses the points with |coordinate| <= fitting_domain_ratio [m]
         if axis == 0:
             xm = self.x_interpolated.copy()
             zm = self.Z_INTERPOLATED[:,self.y_interpolated.size//2]
@@ -458,20 +489,19 @@ class FEA_File():
 
         # plot(xcut, zmcut, xm, zm, legend=["cut", "original"])
 
-        print( numpy.argwhere(numpy.isnan(self.Z_INTERPOLATED)) )
         print("Fitting interval: [%g,%g] (using %d points)" % (xcut[0],xcut[-1],xcut.size))
 
         coeff = numpy.polyfit(xcut, numpy.gradient(zmcut,xcut), deg=1)
 
-        # zfit = coeff[0] * xm  + coeff[1]
         radius = 1 / coeff[0]
-        print("Detrending straight line on sloped (axis=%d): zfit = %g * coordinate + %g " % (axis, coeff[1], coeff[0]))
-        print("Radius of curvature: %g m" % (1.0 / coeff[0]))
+        print("Detrending straight line on slopes (axis=%d): slope fit = %g * coordinate + %g " % (axis, coeff[0], coeff[1]))
+        print("Radius of curvature: %g m" % radius)
 
-        if radius >= 0:
-            zfit = radius - numpy.sqrt(radius ** 2 - xm ** 2)
-        else:
-            zfit = radius + numpy.sqrt(radius ** 2 - xm ** 2)
+        # circle sag: R - sqrt(R^2 - x^2) (R >= 0) or R + sqrt(R^2 - x^2) (R < 0), written in the
+        # algebraically equivalent form x^2 / (R + sign(R) sqrt(R^2 - x^2)), which does not lose
+        # precision for large radii
+        sign = 1.0 if radius >= 0 else -1.0
+        zfit = xm ** 2 / (radius + sign * numpy.sqrt(radius ** 2 - xm ** 2))
 
         # plot(xm, zfit, legend=["fit"])
         # plot(xcut, zmcut, xm, zfit, legend=["cut","fit"],yrange=[-0.000015,0.000005])
@@ -524,11 +554,6 @@ def surface_plot(xs,ys,zs):
 
 
 if __name__ == "__main__":
-
-
-
-
-    # set_qt()
 
 
     # o1 = FEA_File.process_file("/home/manuel/OASYS1.2/alsu-scripts/ANSYS/s4.txt", n_axis_0=301, n_axis_1=51,
@@ -585,8 +610,13 @@ if __name__ == "__main__":
     #              detrend=0, reset_height_method=0,
     #              replicate_raw_data_flag=3,do_plot=False)
 
+    # demo: a synthetic OASYS surface file (Z[iy, ix] = tilt along x + circle along y)
+    x = numpy.linspace(-0.05, 0.05, 101)
+    y = numpy.linspace(-0.01, 0.01, 41)
+    write_surface_file(1e-6 * (x[None, :] / 0.05) + y[:, None] ** 2 / (2 * 50.0), x, y, "FEA_File_demo.h5", overwrite=True)
+
     fea_file_object = FEA_File()
-    fea_file_object.set_filename("/users/srio/OASYS1.2/shadow3-scripts/METROLOGY/ring256.h5")
+    fea_file_object.set_filename("FEA_File_demo.h5")
     fea_file_object.load_multicolumn_file(skiprows=0,
                                                file_in_type=2,
                                                factorX=1.0,

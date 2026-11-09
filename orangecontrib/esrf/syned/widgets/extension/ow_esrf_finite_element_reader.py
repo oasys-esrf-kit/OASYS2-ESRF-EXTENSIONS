@@ -324,13 +324,8 @@ class FiniteElementReader(OWWidget):
         self.load_raw_data()
         self.fea_file_object.triangulate()
 
-        if self.file_in_type == 2:
-            self.fea_file_object.interpolate(self.n_axis_0, self.n_axis_1, remove_nan=self.remove_nan)
-        else:
-            self.fea_file_object.interpolate(self.n_axis_0 + 3, self.n_axis_1 + 3, remove_nan=self.remove_nan)
-
-        if self.fea_file_object.does_interpolated_have_nan():
-            self.fea_file_object.remove_borders_in_interpolated_data()
+        # centred grid of n_axis_0 x n_axis_1 points (see FEA_File.interpolate_grid)
+        self.fea_file_object.interpolate_grid(self.n_axis_0, self.n_axis_1, remove_nan=self.remove_nan)
 
         if self.detrended == 0:
             pass
@@ -362,8 +357,6 @@ class FiniteElementReader(OWWidget):
 
     def update_script(self):
         # Python script reproducing the calculation done in _calculate() and plot_and_send_results()
-        n0, n1 = (self.n_axis_0, self.n_axis_1) if self.file_in_type == 2 else (self.n_axis_0 + 3, self.n_axis_1 + 3)
-
         script = """
 import numpy
 from orangecontrib.esrf.syned.util.FEA_File import FEA_File
@@ -385,22 +378,21 @@ o.load_multicolumn_file(skiprows=%d, file_in_type=%d, factorX=%r, factorY=%r, fa
 o.replicate_raw_data(%d) # 0=No, 1=along axis 0, 2=along axis 1, 3=along axes 0 and 1
 
 #
-# interpolation (remove_nan: 0=No, 1=replace by min height, 2=replace by zero)
+# interpolation to a centred grid of n_axis_0 x n_axis_1 points
+# (remove_nan: 0=No, 1=replace by min height, 2=replace by zero)
 #
 o.triangulate()
-o.interpolate(%d, %d, remove_nan=%d)
-if o.does_interpolated_have_nan():
-    o.remove_borders_in_interpolated_data()
+o.interpolate_grid(%d, %d, remove_nan=%d)
 """ % (self.file_in, self.get_file_out(), self.file_in_skiprows, self.file_in_type,
        float(self.file_factor_x), float(self.file_factor_y), float(self.file_factor_z),
-       self.replicate_raw_data_flag, n0, n1, self.remove_nan)
+       self.replicate_raw_data_flag, self.n_axis_0, self.n_axis_1, self.remove_nan)
 
         if self.detrended != 0 or self.reset_height_method != 0 or self.sigma_flag == 1:
             script += "\n#\n# postprocess\n#\n"
         if self.detrended in (1, 2):
-            script += "o.detrend_straight_line(axis=%d, fitting_domain_ratio=%r)\n" % (self.detrended - 1, float(self.detrended_fit_range))
+            script += "o.detrend_straight_line(axis=%d, fitting_domain_ratio=%r) # fit on |coordinate| <= value [m]\n" % (self.detrended - 1, float(self.detrended_fit_range))
         elif self.detrended in (3, 4):
-            script += "o.detrend_best_circle(axis=%d, fitting_domain_ratio=%r)\n" % (self.detrended - 3, float(self.detrended_fit_range))
+            script += "o.detrend_best_circle(axis=%d, fitting_domain_ratio=%r) # fit on |coordinate| <= value [m]\n" % (self.detrended - 3, float(self.detrended_fit_range))
         if self.reset_height_method == 1:
             script += "o.reset_height_to_minimum()\n"
         elif self.reset_height_method == 2:
