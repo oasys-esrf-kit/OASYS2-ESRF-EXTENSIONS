@@ -3,15 +3,12 @@ OASYS2 / AnyQt port of FiniteElementReader
 - Converts PyQt5 -> AnyQt (compatible with PyQt6 / PySide6 backends)
 - Updates OASYS1 imports to oasys2.widget.* layout
 - Keeps matplotlib plotting (FigureCanvasQTAgg) and silx Plot2D
-
-If you hit import errors, paste the traceback and I'll patch quickly.
 """
 
 import os
 import sys
 import numpy
 
-from AnyQt import QtGui
 from AnyQt.QtCore import QRect, Qt
 from AnyQt.QtWidgets import QApplication, QLabel, QSizePolicy, QMessageBox
 from AnyQt.QtGui import QPixmap, QTextCursor
@@ -23,13 +20,11 @@ from orangewidget.widget import Output
 from oasys2.widget import gui as oasysgui
 from oasys2.widget.widget import OWWidget
 from oasys2.widget.util.widget_util import EmittingStream
-from oasys2.widget.util import congruence
 
 from oasys2.widget.util.widget_objects import OasysSurfaceData
-from oasys2.widget.util.widget_util import write_surface_file
 
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
 from orangecontrib.esrf.syned.util.FEA_File import FEA_File
@@ -93,14 +88,14 @@ class FiniteElementReader(OWWidget):
 
     display_raw_data = Setting(0)
 
-    fea_file_object = FEA_File()
-
     usage_path = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.widgets.extension"), "misc", "finite_element_usage.png")
 
     def __init__(self, show_automatic_box=False):
         super().__init__()
 
-        geom = QApplication.primaryScreen().availableGeometry()
+        self.fea_file_object = FEA_File()
+
+        geom =QApplication.primaryScreen().availableGeometry()
         self.setGeometry(QRect(round(geom.width() * 0.05),
                                round(geom.height() * 0.05),
                                round(min(geom.width() * 0.98, self.MAX_WIDTH)),
@@ -216,15 +211,19 @@ class FiniteElementReader(OWWidget):
         self.set_visible()
 
     def set_visible(self):
-        if self.detrended == 0:
-            self.detrended_fit_range_id.setVisible(False)
-        else:
-            self.detrended_fit_range_id.setVisible(True)
+        self.detrended_fit_range_id.setVisible(self.detrended != 0)
+        self.sigma_id.setVisible(self.sigma_flag != 0)
 
-        if self.sigma_flag == 0:
-            self.sigma_id.setVisible(False)
-        else:
-            self.sigma_id.setVisible(True)
+    @staticmethod
+    def clear_box(box):
+        # removeItem() alone leaves the widget alive and visible; delete it.
+        layout = box.layout()
+        while layout.count() > 0:
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
 
     def create_tabs_results(self):
         tabs_setting = self.tabs_setting
@@ -298,8 +297,17 @@ class FiniteElementReader(OWWidget):
 
     def calculate(self):
         self.writeStdOut(initialize=True)
+        old_stdout = sys.stdout
         sys.stdout = EmittingStream(textWritten=self.writeStdOut)
+        try:
+            self._calculate()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.StandardButton.Ok)
+            if self.IS_DEVELOP: raise exception
+        finally:
+            sys.stdout = old_stdout
 
+    def _calculate(self):
         self.load_raw_data()
         self.fea_file_object.triangulate()
 
@@ -359,13 +367,9 @@ class FiniteElementReader(OWWidget):
 
         if self.file_in_type != 2:
             # interpolation plot
-            try:
-                self.interpolation_id.layout().removeItem(self.interpolation_id.layout().itemAt(1))
-                self.interpolation_id.layout().removeItem(self.interpolation_id.layout().itemAt(0))
-            except Exception:
-                pass
+            self.clear_box(self.interpolation_id)
 
-            f = self.fea_file_object.plot_interpolated(show=0)
+            f =self.fea_file_object.plot_interpolated(show=0)
             figure_canvas = FigureCanvasQTAgg(f)
             toolbar = NavigationToolbar(figure_canvas, self)
 
@@ -373,11 +377,7 @@ class FiniteElementReader(OWWidget):
             self.interpolation_id.layout().addWidget(figure_canvas)
 
             # triangulation plot
-            try:
-                self.triangulation_id.layout().removeItem(self.triangulation_id.layout().itemAt(1))
-                self.triangulation_id.layout().removeItem(self.triangulation_id.layout().itemAt(0))
-            except Exception:
-                pass
+            self.clear_box(self.triangulation_id)
 
             f = self.fea_file_object.plot_triangulation(show=0)
             figure_canvas = FigureCanvasQTAgg(f)
@@ -387,11 +387,7 @@ class FiniteElementReader(OWWidget):
             self.triangulation_id.layout().addWidget(figure_canvas)
 
         if self.display_raw_data:
-            try:
-                self.rawdata_id.layout().removeItem(self.rawdata_id.layout().itemAt(1))
-                self.rawdata_id.layout().removeItem(self.rawdata_id.layout().itemAt(0))
-            except Exception:
-                pass
+            self.clear_box(self.rawdata_id)
 
             xs, ys, zs = self.fea_file_object.get_deformed()
             xs *= 1e3
@@ -485,13 +481,7 @@ class FiniteElementReader(OWWidget):
         self.Outputs.DABAM1DProfile.send(dabam_profile)
 
     def plot_data2D(self, data2D, dataX, dataY, tabs_canvas_index, title="title", xtitle="X", ytitle="Y"):
-        try:
-            # remove first item if exists
-            item = tabs_canvas_index.layout().itemAt(0)
-            if item is not None:
-                tabs_canvas_index.layout().removeItem(item)
-        except Exception:
-            pass
+        self.clear_box(tabs_canvas_index)
 
         origin = (dataX[0], dataY[0])
         scale = (dataX[1] - dataX[0], dataY[1] - dataY[0])
@@ -527,12 +517,7 @@ class FiniteElementReader(OWWidget):
         tabs_canvas_index.layout().addWidget(tmp)
 
     def plot_data1D(self, dataX, dataY, tabs_canvas_index, title="", xtitle="", ytitle=""):
-        try:
-            item = tabs_canvas_index.layout().itemAt(0)
-            if item is not None:
-                tabs_canvas_index.layout().removeItem(item)
-        except Exception:
-            pass
+        self.clear_box(tabs_canvas_index)
 
         tmp = oasysgui.plotWindow()
         tmp.addCurve(dataX, dataY)
