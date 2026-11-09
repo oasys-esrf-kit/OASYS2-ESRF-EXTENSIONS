@@ -38,6 +38,8 @@ from orangecontrib.esrf.shadow4.util.conic_penelope import (
     hyperboloid as p_hyperboloid
 )
 
+from orangecontrib.esrf.util.python_script import PythonScript
+
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class OWConic(OWWidget):
@@ -159,6 +161,7 @@ class OWConic(OWWidget):
 
         gui.rubber(self.controlArea)
         self.initializeTabs()
+        self.update_script()
         gui.rubber(self.mainArea)
 
     def get_surface_list(self):
@@ -174,15 +177,22 @@ class OWConic(OWWidget):
         self.tab = [
             oasysgui.createTabPage(self.tabs, "Results"),
             oasysgui.createTabPage(self.tabs, "Output"),
+            oasysgui.createTabPage(self.tabs, "Script"),
         ]
         for tab in self.tab:
             tab.setFixedHeight(self.IMAGE_HEIGHT)
             tab.setFixedWidth(self.IMAGE_WIDTH)
 
-        self.plot_canvas = [None] * len(self.tab)
         self.profileInfo = oasysgui.textArea()
         profile_box = oasysgui.widgetBox(self.tab[1], "", addSpace=True, orientation="horizontal")
         profile_box.layout().addWidget(self.profileInfo)
+
+        # script widget
+        self.python_script = PythonScript()
+        self.python_script.code_area.setFixedHeight(400)
+        script_box = gui.widgetBox(self.tab[2], "Python script", addSpace=True, orientation="horizontal")
+        script_box.layout().addWidget(self.python_script)
+
         self.tabs.setCurrentIndex(0)
 
     def check_fields(self):
@@ -217,6 +227,7 @@ class OWConic(OWWidget):
 
     def _calculate(self):
         self.check_fields()
+        self.update_script()
 
         x = numpy.linspace(-self.semilength_x, self.semilength_x, self.nx)
         y = numpy.linspace(-self.semilength_y, self.semilength_y, self.ny)
@@ -365,6 +376,121 @@ class OWConic(OWWidget):
                                    zz=Z.T,
                                    surface_data_file=self.filename_h5))
 
+
+    def get_conic_script_code(self):
+        """
+        For the selected configuration and calculation method returns (method label, import line, code),
+        where code creates the S4Conic instance s4 from p, q, theta exactly as done in _calculate().
+        """
+        S4  = "from shadow4.optical_surfaces.s4_conic import S4Conic\n"
+        PEN = "from orangecontrib.esrf.shadow4.util.conic_penelope import %s\n"
+        FAC = "from orangecontrib.esrf.shadow4.util.conics_from_factory_parameters import %s\n"
+        FROM_CCC = "s4 = S4Conic.initialize_from_coefficients(ccc)\n"
+        FROM_PEN = "s4 = S4Conic.initialize_from_coefficients(ccc['ccc'])\n"
+        KW = "cylindrical=0, cylangle=0.0, switch_convexity=0"
+
+        surface = self.get_surface_list()[self.configuration]
+        m = self.calculation_method
+
+        if surface == "Plane":
+            return "s4_conic (fixed)", "", "s4 = S4Conic.initialize_as_plane()\n"
+        elif surface == "Sphere":
+            if m == 1:
+                return "penelope", PEN % "sphere as p_sphere", \
+                       "ccc = p_sphere(ssour=p, simag=q, theta_grazing=theta)\n" + FROM_PEN
+            return "s4_conic (fixed)", "", "s4 = S4Conic.initialize_as_sphere_from_focal_distances(p, q, theta, %s)\n" % KW
+
+        table = {
+            "Paraboloid (collimating)": [
+                ("", "s4 = S4Conic.initialize_as_paraboloid_from_focal_distances(p, 1e10, theta, %s)\n" % KW),
+                (PEN % "paraboloid as p_paraboloid", "ccc = p_paraboloid(ssour=p, simag=1e10, theta_grazing=theta)\n" + FROM_PEN),
+                (FAC % "paraboloid_collimating", "ccc = paraboloid_collimating(p=p, theta=theta)\n" + FROM_CCC),
+                (FAC % "ken_paraboloid_collimating", "ccc = ken_paraboloid_collimating(p=p, theta=theta)\n" + FROM_CCC)],
+            "Paraboloid (focusing)": [
+                ("", "s4 = S4Conic.initialize_as_paraboloid_from_focal_distances(1e10, q, theta, %s)\n" % KW),
+                (PEN % "paraboloid as p_paraboloid", "ccc = p_paraboloid(ssour=1e10, simag=q, theta_grazing=theta)\n" + FROM_PEN),
+                (FAC % "paraboloid_focusing", "ccc = paraboloid_focusing(q=q, theta=theta)\n" + FROM_CCC),
+                (FAC % "ken_paraboloid_focusing", "ccc = ken_paraboloid_focusing(q=q, theta=theta)\n" + FROM_CCC)],
+            "Ellipsoid": [
+                ("", "s4 = S4Conic.initialize_as_ellipsoid_from_focal_distances(p, q, theta, %s)\n" % KW),
+                (PEN % "ellipsoid as p_ellipsoid", "ccc = p_ellipsoid(ssour=p, simag=q, theta_grazing=theta)\n" + FROM_PEN),
+                (FAC % "ellipsoid", "ccc = ellipsoid(p=p, q=q, theta=theta)\n" + FROM_CCC),
+                (FAC % "ken_ellipsoid", "ccc = ken_ellipsoid(p=p, q=q, theta=theta)\n" + FROM_CCC)],
+            "Hyperboloid": [
+                ("", "s4 = S4Conic.initialize_as_hyperboloid_from_focal_distances(p, q, theta, %s)\n" % KW),
+                (PEN % "hyperboloid as p_hyperboloid", "ccc = p_hyperboloid(ssour=p, simag=q, theta_grazing=theta)\n" + FROM_PEN),
+                (FAC % "hyperboloid", "ccc = hyperboloid(p=p, q=q, theta=theta)\n" + FROM_CCC),
+                (FAC % "ken_hyperboloid", "ccc = ken_hyperboloid(p=p, q=q, theta=theta)\n" + FROM_CCC)],
+        }
+        imports, code = table[surface][m]
+        return ["s4_conic", "penelope", "mathematica", "Ken"][m], imports, code
+
+    def update_script(self):
+        # Python script reproducing the calculation done in _calculate()
+        surface = self.get_surface_list()[self.configuration]
+        method, extra_import, conic_code = self.get_conic_script_code()
+
+        script = """
+import numpy
+from shadow4.optical_surfaces.s4_conic import S4Conic
+""" + extra_import + """from oasys2.widget.util.widget_util import write_surface_file
+from srxraylib.plot.gol import plot_image
+
+#
+# inputs
+#
+p     = %r # distance source to mirror [m]
+q     = %r # distance mirror to image [m]
+theta = %r # grazing angle [rad]
+
+nx, ny       = %d, %d # points in X (sagittal), Y (tangential)
+semilength_x = %r # m
+semilength_y = %r # m
+filename_h5  = %r
+
+#
+# conic: %s, calculation method: %s
+#
+""" % (float(self.source_oe), float(self.oe_image), float(self.theta), self.nx, self.ny,
+       float(self.semilength_x), float(self.semilength_y), self.filename_h5, surface, method)
+
+        script += conic_code
+        mirror_txt = surface
+
+        if self.cylindrize in (1, 2):
+            kind = "meridional" if self.cylindrize == 1 else "sagittal"
+            mirror_txt += " (cylinder, %s)" % kind
+            script += """
+# cylindrize (%s): cylinder axis angle with X: 0=meridional, pi/2=sagittal
+set_cylindrical = getattr(s4, "set_cylindrical", None) or getattr(s4, "_set_cylindrical")  # renamed in recent shadow4
+set_cylindrical(%s)
+""" % (kind, "0.0" if self.cylindrize == 1 else "numpy.pi / 2")
+
+        script += """
+ccc = s4.get_coefficients()
+print("Conic coefficients: ")
+for i in range(10):
+    print("    ccc[%%d] = %%20.12g" %% (i, ccc[i]))
+
+#
+# numerical surface: Z[ix, iy], shape (nx, ny) (shadow4 convention);
+# the h5 file uses the transposed array, shape (ny, nx).
+#
+x = numpy.linspace(-semilength_x, semilength_x, nx)
+y = numpy.linspace(-semilength_y, semilength_y, ny)
+X = numpy.outer(x, numpy.ones_like(y))
+Y = numpy.outer(numpy.ones_like(x), y)
+
+Z = s4.height(y=Y, x=X, return_solution=0)
+
+write_surface_file(Z.T, x, y, filename_h5, overwrite=True)
+print("HDF5 file %%s written to disk." %% filename_h5)
+
+plot_image(Z, x, y, title="%s p:%%6.3f m, q:%%6.3f m, theta:%%6.3f mrad" %% (p, q, 1e3 * theta),
+           xtitle="x (sagittal) [m]", ytitle="y (tangential) [m]", aspect='auto')
+""" % mirror_txt
+
+        self.python_script.set_code(script)
 
     def plot_data2D(self, data2D, dataX, dataY, canvas_widget_id, title="title", xtitle="X", ytitle="Y"):
         # delete previous plot(s): removeItem() alone leaves the widget alive and visible
