@@ -3,14 +3,14 @@ import sys
 import numpy
 
 from AnyQt.QtCore import QRect, Qt
-from AnyQt.QtWidgets import QApplication, QMessageBox, QScrollArea, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QWidget, QLabel, QSizePolicy
-from AnyQt.QtGui import QTextCursor, QFont, QPalette, QColor, QPainter, QBrush, QPen, QPixmap
+from AnyQt.QtWidgets import QApplication, QMessageBox, QLabel, QSizePolicy
+from AnyQt.QtGui import QTextCursor, QPixmap
 
 from silx.gui.plot import Plot2D
 
 import orangecanvas.resources as resources
 
-from orangewidget import gui, widget
+from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Output
 
@@ -22,7 +22,6 @@ from oasys2.widget.util.widget_util import EmittingStream
 from oasys2.widget.util.widget_objects import OasysSurfaceData
 from oasys2.widget.util.widget_util import write_surface_file
 
-# NOTE: wofryimpl is optional; keep guarded in case user doesn't have it installed
 from wofryimpl.beamline.optical_elements.refractors.lens import WOLens
 from wofry.propagator.wavefront2D.generic_wavefront import GenericWavefront2D
 
@@ -55,7 +54,6 @@ class OWLensSurface(OWWidget):
     TABS_AREA_HEIGHT = 650
 
     # variables
-    lens_profile = Setting(0)
     number_of_curved_surfaces = Setting(2)
     lens_radius = Setting(200e-6)
     surface_shape = Setting(0)
@@ -66,15 +64,12 @@ class OWLensSurface(OWWidget):
     aperture_shape = Setting(0)
     aperture_dimension_v = Setting(1e-3)
     aperture_dimension_h = Setting(1e-3)
-    shape = Setting(1)
-    radius = Setting(100e-6)
     nx = Setting(101)
     ny = Setting(101)
     semilength_x = Setting(0.001)
     semilength_y = Setting(0.001)
     filename_h5 = Setting("lens.h5")
 
-    tab = []
     usage_path = os.path.join(resources.package_dirname("orangecontrib.esrf.syned.widgets.extension"), "misc", "lens_surface_usage.png")
 
     def __init__(self):
@@ -98,7 +93,7 @@ class OWLensSurface(OWWidget):
         tab_calc = oasysgui.createTabPage(tabs_setting, "Calculate")
         tab_usa = oasysgui.createTabPage(tabs_setting, "Use of the Widget")
 
-        button = gui.button(tab_calc, self, "Calculate", callback=self.calculate)
+        gui.button(tab_calc, self, "Calculate", callback=self.calculate)
 
         out_calc = oasysgui.widgetBox(tab_calc, "Lens Settings", addSpace=True, orientation="vertical")
         self.draw_lens_settings_box(id=out_calc)
@@ -147,17 +142,10 @@ class OWLensSurface(OWWidget):
             tab.setFixedHeight(self.IMAGE_HEIGHT)
             tab.setFixedWidth(self.IMAGE_WIDTH)
 
-        self.plot_canvas = [None] * len(self.tab)
-
         self.profileInfo = oasysgui.textArea()
         profile_box = oasysgui.widgetBox(self.tab[1], "", addSpace=True, orientation="horizontal")
         profile_box.layout().addWidget(self.profileInfo)
 
-        for index in range(len(self.tab)):
-            try:
-                self.tab[index].layout().addWidget(self.plot_canvas[index])
-            except Exception:
-                pass
         self.tabs.setCurrentIndex(0)
 
     def draw_lens_settings_box(self, id):
@@ -182,12 +170,12 @@ class OWLensSurface(OWWidget):
 
         oasysgui.lineEdit(self.lens_id, self, "aperture_dimension_v", "Aperture V (height/diameter) [m]", labelWidth=260, valueType=float, orientation="horizontal")
 
-        self.lens_width_id = oasysgui.widgetBox(id, orientation="vertical", height=None)
+        self.lens_width_id = oasysgui.widgetBox(self.lens_id, orientation="vertical", height=None)
         oasysgui.lineEdit(self.lens_width_id, self, "aperture_dimension_h", "Aperture H (width) [m]", labelWidth=260, valueType=float, orientation="horizontal")
 
         oasysgui.lineEdit(self.lens_id, self, "n_lenses", "Number of lenses", labelWidth=300, valueType=int, orientation="horizontal")
 
-        oasysgui.lineEdit(id, self, "multiplicative_factor", "Multiplicative factor for z (defailt=1.0)", labelWidth=300, valueType=float, orientation="horizontal")
+        oasysgui.lineEdit(id, self, "multiplicative_factor", "Multiplicative factor for z (default=1.0)", labelWidth=300, valueType=float, orientation="horizontal")
 
     def set_visible(self):
         self.lens_id.setVisible(self.surface_shape == 1)
@@ -196,6 +184,7 @@ class OWLensSurface(OWWidget):
     def check_fields(self):
         self.nx = congruence.checkStrictlyPositiveNumber(self.nx, "Points X")
         self.ny = congruence.checkStrictlyPositiveNumber(self.ny, "Points Y")
+        if self.nx < 2 or self.ny < 2: raise Exception("Points X and Points Y must be at least 2")
         self.semilength_x = congruence.checkStrictlyPositiveNumber(self.semilength_x, "Half length X")
         self.semilength_y = congruence.checkStrictlyPositiveNumber(self.semilength_y, "Half length Y")
 
@@ -209,13 +198,24 @@ class OWLensSurface(OWWidget):
 
     def calculate(self):
         self.writeStdOut(initialize=True)
+        old_stdout = sys.stdout
         sys.stdout = EmittingStream(textWritten=self.writeStdOut)
+        try:
+            self._calculate()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.StandardButton.Ok)
+            if self.IS_DEVELOP: raise exception
+        finally:
+            sys.stdout = old_stdout
 
+    def _calculate(self):
         self.check_fields()
 
         x = numpy.linspace(-self.semilength_x, self.semilength_x, self.nx)
         y = numpy.linspace(-self.semilength_y, self.semilength_y, self.ny)
 
+        # Z is kept internally as Z[ix, iy], shape (nx, ny) (shadow4 convention);
+        # the h5 file and OasysSurfaceData use the transposed array, shape (ny, nx).
         if self.surface_shape == 0:  # plane
             Z = numpy.ones((self.nx, self.ny)) * self.wall_thickness
             title = "Cumulated lens profile [m]"
@@ -237,15 +237,16 @@ class OWLensSurface(OWWidget):
                 aperture_dimension_v=self.aperture_dimension_v,
             )
 
-            title = "Cumulated lens profile [m] R:%6.3f $\\mu$m" % (1e6 * self.radius)
+            title = "Cumulated lens profile [m] R:%6.3f $\\mu$m" % (1e6 * self.lens_radius)
 
             output_wavefront = GenericWavefront2D.initialize_wavefront_from_range(x_min=-self.semilength_x, x_max=self.semilength_x,
                                                                                   y_min=-self.semilength_y, y_max=self.semilength_y,
                                                                                   number_of_points=(self.nx, self.ny))
 
             xx, yy, Z = optical_element.get_surface_thickness_mesh(output_wavefront)
+            Z = Z.T  # WOLens returns Z[iy, ix], shape (ny, nx): bring it to the internal (nx, ny)
 
-        Z *= self.multiplicative_factor
+        Z = Z * self.multiplicative_factor
 
         write_surface_file(Z.T, x, y, self.filename_h5, overwrite=True)
         print("\nHDF5 file %s written to disk." % self.filename_h5)
@@ -256,13 +257,16 @@ class OWLensSurface(OWWidget):
                          ytitle="y (tangential) [m] (%d pixels)" % y.size)
 
         self.Outputs.surface_data.send(
-            OasysSurfaceData(xx=self.x, yy=self.y, zz=self.Z.T, surface_data_file=self.surface_file_name))
+            OasysSurfaceData(xx=x, yy=y, zz=Z.T, surface_data_file=self.filename_h5))
 
     def plot_data2D(self, data2D, dataX, dataY, canvas_widget_id, title="title", xtitle="X", ytitle="Y"):
-        try:
-            canvas_widget_id.layout().removeItem(canvas_widget_id.layout().itemAt(0))
-        except Exception:
-            pass
+        # delete previous plot(s): removeItem() alone leaves the widget alive and visible
+        layout = canvas_widget_id.layout()
+        while layout.count() > 0:
+            old = layout.takeAt(0).widget()
+            if old is not None:
+                old.setParent(None)
+                old.deleteLater()
 
         origin = (dataX[0], dataY[0])
         scale = (dataX[1] - dataX[0], dataY[1] - dataY[0])
