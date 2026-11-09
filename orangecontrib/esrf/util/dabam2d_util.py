@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # for i in range(len(PATH)):
     #     print(">>>", FAMILY[i], LENS[i])
 
-    LENS, FAMILY, FILE, PATH = scan_root_directory("/nobackup/gurb1/srio/DABAM2D/ESRF/C_2D_R320um")
+    FILE, PATH = scan_root_directory("/nobackup/gurb1/srio/DABAM2D/ESRF/C_2D_R320um")
 
 
     # for path, dirs, files in os.walk("/nobackup/gurb1/srio/DABAM2D/ESRF"):
@@ -55,6 +55,6 @@ if __name__ == "__main__":
     #             FAMILY.append(items[-4])
 
     for i in range(len(PATH)):
-        print(">>>", FAMILY[i], LENS[i], FILE[i]) #,  PATH[i])
+        print(">>>", FILE[i], PATH[i])
 
     print("Total h5 files found: ", len(FILE))

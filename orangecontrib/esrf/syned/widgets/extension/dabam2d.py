@@ -14,14 +14,12 @@ from orangewidget.widget import Output
 from oasys2.widget.widget import OWWidget
 from oasys2.widget import gui as oasysgui
 from oasys2.widget.util import congruence
-from oasys2.widget.util.widget_util import EmittingStream
 
 # The utility to scan dabam directories - should be available in the same package
 from orangecontrib.esrf.util.dabam2d_util import scan_root_directory
 
 from silx.gui.plot import Plot2D
 from scipy.interpolate import RectBivariateSpline
-from srxraylib.metrology.profiles_simulation import slopes
 
 # OASYS2 helpers for writing/objects
 import oasys2.widget.util.widget_util as OU
@@ -144,50 +142,48 @@ class OWdabam2d(OWWidget):
             self.root = root
 
     def write_and_send(self):
-        self.get_selection()
-        self.read_selected_data_files_sum()
-
-        # write HDF5 using OASYS util
-        zz = np.round(self.data[-1][2], 12)
-        xx = np.round(self.data[-1][0], 12)
-        yy = np.round(self.data[-1][1], 12)
-        filename = self.file_out
         try:
-            OU.write_surface_file(zz.T, xx, yy, file_name=filename)
+            self.get_selection()
+            self.check_selection()
+            self.read_selected_data_files_sum()
+
+            xx, yy, zz = self.data[-1]  # zz has shape (len(xx), len(yy))
+
+            # write HDF5 using OASYS util (a failure must stop here: the sent object points to this file)
+            filename = self.file_out
+            congruence.checkEmptyString(filename, "output file")
+            try:
+                OU.write_surface_file(np.round(zz, 12).T, np.round(xx, 12), np.round(yy, 12), file_name=filename)
+            except Exception as e:
+                raise Exception("Error writing hdf5 file %s: %s" % (filename, str(e)))
             print(f"File {filename} written to disk.")
-        except Exception as e:
-            print("*** Error writing hdf5 file **", e)
 
-        # send 2D profile
-        xx = self.data[-1][0]
-        yy = self.data[-1][1]
-        zz = self.data[-1][2]
-        self.Outputs.SurfaceData.send(OasysSurfaceData(xx=xx, yy=yy, zz=zz.T, surface_data_file=self.file_out))
+            # send 2D profile
+            self.Outputs.SurfaceData.send(OasysSurfaceData(xx=xx, yy=yy, zz=zz.T, surface_data_file=filename))
 
-        # send 1D profile
-        if self.extract_profile1D == 0:
-            abscissas = xx
-            perp_abscissas = yy
-            index0 = np.argwhere(perp_abscissas >= 0.0)
-            try:
-                index0 = index0[0][0]
-            except Exception:
-                index0 = -1
-            profile1D = zz[:, index0]
-        else:
-            abscissas = yy
-            perp_abscissas = xx
-            index0 = np.argwhere(perp_abscissas >= self.coordinate_profile1D)
-            try:
-                index0 = index0[0][0]
-            except Exception:
-                index0 = -1
-            profile1D = zz[index0, :]
+            # send 1D profile, taken at the grid point nearest to coordinate_profile1D
+            if self.extract_profile1D == 0:  # along axis 0, at y = coordinate
+                abscissas = xx
+                index0 = int(np.argmin(np.abs(yy - self.coordinate_profile1D)))
+                profile1D = zz[:, index0]
+            else:                            # along axis 1, at x = coordinate
+                abscissas = yy
+                index0 = int(np.argmin(np.abs(xx - self.coordinate_profile1D)))
+                profile1D = zz[index0, :]
 
-        dabam_profile = np.zeros((profile1D.size, 2))
-        dabam_profile[:, 0] = abscissas
-        dabam_profile[:, 1] = profile1D
-        self.Outputs.DABAM1DProfile.send(dabam_profile)
+            dabam_profile = np.zeros((profile1D.size, 2))
+            dabam_profile[:, 0] = abscissas
+            dabam_profile[:, 1] = profile1D
+            self.Outputs.DABAM1DProfile.send(dabam_profile)
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.StandardButton.Ok)
+            if self.IS_DEVELOP:
+                raise
+
+    def check_selection(self):
+        if not self.selected_files_with_path:
+            raise Exception("No file selected.\n"
+                            "Scan the root directory, then select (highlight) one or more file names in the list.")
 
     def scan_directory(self):
         scanned_files_without_path, scanned_files_with_path = scan_root_directory(self.root)
@@ -244,6 +240,7 @@ class OWdabam2d(OWWidget):
     def view_selection(self):
         self.get_selection()
         try:
+            self.check_selection()
             self.read_selected_data_files()
             self.append_tabs_surfaces()
             self.plot_selection()
@@ -255,6 +252,7 @@ class OWdabam2d(OWWidget):
     def view_sum(self):
         self.get_selection()
         try:
+            self.check_selection()
             self.read_selected_data_files_sum()
             current_tab = self.tabs.currentIndex()
             self.tab.append(oasysgui.createTabPage(self.tabs, "sum"))
@@ -268,43 +266,35 @@ class OWdabam2d(OWWidget):
             if self.IS_DEVELOP:
                 raise
 
-    def read_selected_data_files(self):
-        self.data = []
-        for surface_file_name in self.selected_files_with_path:
-            surface_file_name = congruence.checkDir(surface_file_name)
-            try:
-                file = h5py.File(surface_file_name, 'r')
+    def read_surface(self, surface_file_name):
+        """Returns xx, yy, zz with zz of shape (len(xx), len(yy)), scaled and (optionally) rebased."""
+        surface_file_name = congruence.checkDir(surface_file_name)
+        try:
+            with h5py.File(surface_file_name, 'r') as file:
                 zz = file['surface_file/Z'][()].T
                 xx = file['surface_file/X'][()]
                 yy = file['surface_file/Y'][()]
-                print("Data read from file:", surface_file_name, zz.shape, xx.shape, yy.shape)
-            except Exception as ee:
-                raise IOError("Error loading HDF5 file" + str(ee))
+            print("Data read from file:", surface_file_name, zz.shape, xx.shape, yy.shape)
+        except Exception as ee:
+            raise IOError("Error loading HDF5 file %s: %s" % (surface_file_name, str(ee)))
 
-            zz = zz * self.conversion_to_m_z
-            if self.rebase:
-                zz -= zz.min()
+        zz = zz * self.conversion_to_m_z
+        if self.rebase:
+            zz -= zz.min()
 
-            self.data.append([xx, yy, zz])
+        return xx, yy, zz
+
+    def read_selected_data_files(self):
+        self.data = [list(self.read_surface(f)) for f in self.selected_files_with_path]
 
     def read_selected_data_files_sum(self):
+        # Files after the first are interpolated (cubic spline) onto the grid of the first file.
+        # Outside their own domain the spline EXTRAPOLATES: use files covering the same area.
         XX = None
         YY = None
         ZZ = None
         for i, surface_file_name in enumerate(self.selected_files_with_path):
-            surface_file_name = congruence.checkDir(surface_file_name)
-            try:
-                file = h5py.File(surface_file_name, 'r')
-                zz = file['surface_file/Z'][()].T
-                xx = file['surface_file/X'][()]
-                yy = file['surface_file/Y'][()]
-                print("Data read from file:", surface_file_name, zz.shape, xx.shape, yy.shape)
-            except Exception as ee:
-                raise IOError("Error loading HDF5 file" + str(ee))
-
-            zz = zz * self.conversion_to_m_z
-            if self.rebase:
-                zz -= zz.min()
+            xx, yy, zz = self.read_surface(surface_file_name)
 
             if i == 0:
                 XX = xx.copy()
@@ -371,25 +361,6 @@ class OWdabam2d(OWWidget):
             self.plot_data2D(zz, xx, yy, self.tab[tab_index], title=title_top,
                              xtitle=f"X [m] ({xx.size} pixels, max:{xx.max():f})",
                              ytitle=f"Y [m] ({yy.size} pixels, max:{yy.max():f})")
-
-    def zernike(self):
-        import barc4ro.barc4ro as b4RO
-        N = 37
-        heightProfData = self.data[-1][2].T
-        Zcoeffs, fit, residues = b4RO.fit_zernike_circ(heightProfData, nmodes=N, startmode=1, rec_zern=False)
-        print('Zernike coefficients (um): \n' + str(Zcoeffs * 1e6))
-
-    def print_statistics(self):
-        for data_i in self.data:
-            slopeErrorRMS_X, slopeErrorRMS_Y = slopes(data_i[2], data_i[0], data_i[1], silent=1, return_only_rms=1)
-            print("\n*****************")
-            print("Heigh error StDev: %g um" % (1e6 * data_i[2].std()))
-            print("Slope error StDev in axis0: %g urad" % (1e6 * slopeErrorRMS_X))
-            print("Slope error StDev in axis1: %g urad" % (1e6 * slopeErrorRMS_Y))
-            print("*****************")
-            import barc4ro.barc4ro as b4RO
-            Zcoeffs, fit, residues = b4RO.fit_zernike_circ(data_i[2], nmodes=37, startmode=1, rec_zern=False)
-            print('Zernike coefficients (um): \n' + str(Zcoeffs * 1e6))
 
 add_widget_parameters_to_module(__name__)
 
