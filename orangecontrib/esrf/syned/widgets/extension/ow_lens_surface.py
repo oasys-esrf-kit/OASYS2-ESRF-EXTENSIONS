@@ -22,8 +22,9 @@ from oasys2.widget.util.widget_util import EmittingStream
 from oasys2.widget.util.widget_objects import OasysSurfaceData
 from oasys2.widget.util.widget_util import write_surface_file
 
-from wofryimpl.beamline.optical_elements.refractors.lens import WOLens
-from wofry.propagator.wavefront2D.generic_wavefront import GenericWavefront2D
+from barc4ro.projected_thickness import proj_thick_2D_crl
+
+from orangecontrib.esrf.util.python_script import PythonScript
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
@@ -129,6 +130,7 @@ class OWLensSurface(OWWidget):
         gui.rubber(self.controlArea)
         self.initializeTabs()
         self.set_visible()
+        self.update_script()
         gui.rubber(self.mainArea)
 
     def initializeTabs(self):
@@ -136,6 +138,7 @@ class OWLensSurface(OWWidget):
 
         self.tab = [oasysgui.createTabPage(self.tabs, "Results"),
                     oasysgui.createTabPage(self.tabs, "Output"),
+                    oasysgui.createTabPage(self.tabs, "Script"),
                     ]
 
         for tab in self.tab:
@@ -145,6 +148,12 @@ class OWLensSurface(OWWidget):
         self.profileInfo = oasysgui.textArea()
         profile_box = oasysgui.widgetBox(self.tab[1], "", addSpace=True, orientation="horizontal")
         profile_box.layout().addWidget(self.profileInfo)
+
+        # script widget
+        self.python_script = PythonScript()
+        self.python_script.code_area.setFixedHeight(400)
+        script_box = gui.widgetBox(self.tab[2], "Python script", addSpace=True, orientation="horizontal")
+        script_box.layout().addWidget(self.python_script)
 
         self.tabs.setCurrentIndex(0)
 
@@ -210,6 +219,7 @@ class OWLensSurface(OWWidget):
 
     def _calculate(self):
         self.check_fields()
+        self.update_script()
 
         x = numpy.linspace(-self.semilength_x, self.semilength_x, self.nx)
         y = numpy.linspace(-self.semilength_y, self.semilength_y, self.ny)
@@ -221,30 +231,18 @@ class OWLensSurface(OWWidget):
             title = "Cumulated lens profile [m]"
 
         else:  # parabolic
-            optical_element = WOLens.create_from_keywords(
-                name='Real Lens 2D',
-                number_of_curved_surfaces=self.number_of_curved_surfaces,
-                two_d_lens=self.two_d_lens,
-                surface_shape=0,
-                wall_thickness=self.wall_thickness,
-                lens_radius=self.lens_radius,
-                material='',
-                refraction_index_delta=0.0,
-                att_coefficient=0.0,
-                n_lenses=self.n_lenses,
-                aperture_shape=self.aperture_shape,
-                aperture_dimension_h=self.aperture_dimension_h,
-                aperture_dimension_v=self.aperture_dimension_v,
-            )
-
             title = "Cumulated lens profile [m] R:%6.3f $\\mu$m" % (1e6 * self.lens_radius)
 
-            output_wavefront = GenericWavefront2D.initialize_wavefront_from_range(x_min=-self.semilength_x, x_max=self.semilength_x,
-                                                                                  y_min=-self.semilength_y, y_max=self.semilength_y,
-                                                                                  number_of_points=(self.nx, self.ny))
+            foc_plane, shape, apert_h, apert_v, r_min, n, aperture = self.get_barc_inputs()
+            print("barc4ro.proj_thick_2D_crl inputs: foc_plane=%d (1=horizontal, 2=vertical, 3=both), "
+                  "shape=%d (1=parabolic), apert_h=%g m, apert_v=%g m, r_min=%g m, n=%d, aperture=%s" %
+                  (foc_plane, shape, apert_h, apert_v, r_min, n, aperture))
 
-            xx, yy, Z = optical_element.get_surface_thickness_mesh(output_wavefront)
-            Z = Z.T  # WOLens returns Z[iy, ix], shape (ny, nx): bring it to the internal (nx, ny)
+            _, _, Z = proj_thick_2D_crl(foc_plane, shape, apert_h, apert_v, r_min, n,
+                                        _wall_thick=self.wall_thickness, _aperture=aperture,
+                                        _nx=self.nx, _ny=self.ny, _axis_x=x, _axis_y=y,
+                                        isdgr=False, project=True)
+            Z = Z.T * self.n_lenses  # barc4ro returns Z[iy, ix], shape (ny, nx): bring it to the internal (nx, ny)
 
         Z = Z * self.multiplicative_factor
 
@@ -258,6 +256,87 @@ class OWLensSurface(OWWidget):
 
         self.Outputs.surface_data.send(
             OasysSurfaceData(xx=x, yy=y, zz=Z.T, surface_data_file=self.filename_h5))
+
+    def get_barc_inputs(self):
+        """Inputs for barc4ro.projected_thickness.proj_thick_2D_crl (parabolic lens)."""
+        if self.number_of_curved_surfaces == 0:  # parallel plate: treated as a very large parabola
+            foc_plane, r_min, n = 3, 1e18, 1
+        else:
+            foc_plane = {0: 3, 1: 2, 2: 1}[self.two_d_lens]  # 2D: both; 1D tangential: vertical; 1D sagittal: horizontal
+            r_min = self.lens_radius
+            n = 1 if self.number_of_curved_surfaces == 1 else 2  # plano-concave / bi-concave
+        shape = 1  # parabolic
+        if self.aperture_shape == 0:  # circular (diameter = aperture V)
+            aperture, apert_h, apert_v = "c", self.aperture_dimension_v, self.aperture_dimension_v
+        else:                         # rectangular
+            aperture, apert_h, apert_v = "r", self.aperture_dimension_h, self.aperture_dimension_v
+        return foc_plane, shape, apert_h, apert_v, r_min, n, aperture
+
+    def update_script(self):
+        # Python script reproducing the calculation done in _calculate()
+        script = """
+import numpy
+from oasys2.widget.util.widget_util import write_surface_file
+from srxraylib.plot.gol import plot_image
+"""
+        if self.surface_shape == 1:
+            script += """from barc4ro.projected_thickness import proj_thick_2D_crl
+"""
+        script += """
+#
+# inputs
+#
+nx, ny                = %d, %d
+semilength_x          = %r # m
+semilength_y          = %r # m
+wall_thickness        = %r # m
+multiplicative_factor = %r
+filename_h5           = %r
+""" % (self.nx, self.ny, float(self.semilength_x), float(self.semilength_y),
+       float(self.wall_thickness), float(self.multiplicative_factor), self.filename_h5)
+
+        script += """
+x = numpy.linspace(-semilength_x, semilength_x, nx)
+y = numpy.linspace(-semilength_y, semilength_y, ny)
+
+# Z is kept as Z[ix, iy], shape (nx, ny) (shadow4 convention);
+# the h5 file uses the transposed array, shape (ny, nx).
+"""
+        if self.surface_shape == 0:  # plane
+            script += """Z = numpy.ones((nx, ny)) * wall_thickness
+title = "Cumulated lens profile [m]"
+"""
+        else:  # parabolic
+            foc_plane, shape, apert_h, apert_v, r_min, n, aperture = self.get_barc_inputs()
+            script += """
+# projected thickness of one parabolic lens (barc4ro)
+_, _, Z = proj_thick_2D_crl(
+    %d,      # _foc_plane: plane of focusing: 1=horizontal (sagittal), 2=vertical (tangential), 3=both
+    %d,      # _shape: 1=parabolic
+    %r, # _apert_h: horizontal aperture [m]
+    %r, # _apert_v: vertical aperture [m]
+    %r, # _r_min: radius at the parabola tip [m] (1e18 for a parallel plate)
+    %d,      # _n: number of curved surfaces ("holes"): 1=plano-concave, 2=bi-concave
+    _wall_thick=wall_thickness,
+    _aperture=%r, # 'c'=circular, 'r'=rectangular
+    _nx=nx, _ny=ny, _axis_x=x, _axis_y=y,
+    isdgr=False, project=True)
+
+n_lenses = %d
+Z = Z.T * n_lenses  # barc4ro returns Z[iy, ix], shape (ny, nx)
+title = "Cumulated lens profile [m] R:%%6.3f $\\\\mu$m" %% (1e6 * %r)
+""" % (foc_plane, shape, float(apert_h), float(apert_v), float(r_min), n, aperture, self.n_lenses,
+       float(self.lens_radius))
+
+        script += """
+Z = Z * multiplicative_factor
+
+write_surface_file(Z.T, x, y, filename_h5, overwrite=True)
+print("HDF5 file %s written to disk." % filename_h5)
+
+plot_image(Z, x, y, title=title, xtitle="x (sagittal) [m]", ytitle="y (tangential) [m]", aspect='auto')
+"""
+        self.python_script.set_code(script)
 
     def plot_data2D(self, data2D, dataX, dataY, canvas_widget_id, title="title", xtitle="X", ytitle="Y"):
         # delete previous plot(s): removeItem() alone leaves the widget alive and visible
