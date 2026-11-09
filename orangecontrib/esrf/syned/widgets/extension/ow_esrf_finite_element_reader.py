@@ -33,6 +33,8 @@ from silx.gui.plot import Plot2D
 
 from srxraylib.metrology.profiles_simulation import slopes
 
+from orangecontrib.esrf.util.python_script import PythonScript
+
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
 class FiniteElementReader(OWWidget):
@@ -209,6 +211,7 @@ class FiniteElementReader(OWWidget):
         usage_box.layout().addWidget(label)
 
         self.set_visible()
+        self.update_script()
 
     def set_visible(self):
         self.detrended_fit_range_id.setVisible(self.detrended != 0)
@@ -262,6 +265,12 @@ class FiniteElementReader(OWWidget):
         info_box = oasysgui.widgetBox(tmp, "", addSpace=True, orientation="horizontal", height=self.IMAGE_HEIGHT - 20, width=self.IMAGE_WIDTH - 20)
         info_box.layout().addWidget(self.info_id)
 
+        tmp = oasysgui.createTabPage(tabs_setting, "Script")
+        self.python_script = PythonScript()
+        self.python_script.code_area.setFixedHeight(400)
+        script_box = gui.widgetBox(tmp, "Python script", addSpace=True, orientation="horizontal")
+        script_box.layout().addWidget(self.python_script)
+
     def set_input_file(self, filename):
         self.le_beam_file_name.setText(filename)
 
@@ -286,14 +295,17 @@ class FiniteElementReader(OWWidget):
             cursor.movePosition(QTextCursor.MoveOperation.End)
             cursor.insertText(text)
 
-    def set_file_out(self):
+    def get_file_out(self):
         if self.file_in_type == 2:
             file_out = os.path.splitext(self.file_in)[0] + '_processed.h5'
         else:
             file_out = os.path.splitext(self.file_in)[0] + '.h5'
         if file_out[0:4] == "http":
             file_out = file_out.split("/")[-1]
-        self.file_out = file_out
+        return file_out
+
+    def set_file_out(self):
+        self.file_out = self.get_file_out()
 
     def calculate(self):
         self.writeStdOut(initialize=True)
@@ -308,6 +320,7 @@ class FiniteElementReader(OWWidget):
             sys.stdout = old_stdout
 
     def _calculate(self):
+        self.update_script()
         self.load_raw_data()
         self.fea_file_object.triangulate()
 
@@ -346,6 +359,114 @@ class FiniteElementReader(OWWidget):
         print("File %s written to disk.\n" % self.file_out)
 
         self.plot_and_send_results()
+
+    def update_script(self):
+        # Python script reproducing the calculation done in _calculate() and plot_and_send_results()
+        n0, n1 = (self.n_axis_0, self.n_axis_1) if self.file_in_type == 2 else (self.n_axis_0 + 3, self.n_axis_1 + 3)
+
+        script = """
+import numpy
+from orangecontrib.esrf.syned.util.FEA_File import FEA_File
+from srxraylib.metrology.profiles_simulation import slopes
+from srxraylib.plot.gol import plot, plot_image
+
+#
+# inputs
+#
+file_in  = %r
+file_out = %r
+
+#
+# read data (file_in_type: 0=ALS cols: A X Y Z DX DY DZ, 1=ESRF cols: X,Y,Z,DX,DY,DZ, 2=OASYS surface file [hdf5])
+#
+o = FEA_File()
+o.set_filename(file_in)
+o.load_multicolumn_file(skiprows=%d, file_in_type=%d, factorX=%r, factorY=%r, factorZ=%r)
+o.replicate_raw_data(%d) # 0=No, 1=along axis 0, 2=along axis 1, 3=along axes 0 and 1
+
+#
+# interpolation (remove_nan: 0=No, 1=replace by min height, 2=replace by zero)
+#
+o.triangulate()
+o.interpolate(%d, %d, remove_nan=%d)
+if o.does_interpolated_have_nan():
+    o.remove_borders_in_interpolated_data()
+""" % (self.file_in, self.get_file_out(), self.file_in_skiprows, self.file_in_type,
+       float(self.file_factor_x), float(self.file_factor_y), float(self.file_factor_z),
+       self.replicate_raw_data_flag, n0, n1, self.remove_nan)
+
+        if self.detrended != 0 or self.reset_height_method != 0 or self.sigma_flag == 1:
+            script += "\n#\n# postprocess\n#\n"
+        if self.detrended in (1, 2):
+            script += "o.detrend_straight_line(axis=%d, fitting_domain_ratio=%r)\n" % (self.detrended - 1, float(self.detrended_fit_range))
+        elif self.detrended in (3, 4):
+            script += "o.detrend_best_circle(axis=%d, fitting_domain_ratio=%r)\n" % (self.detrended - 3, float(self.detrended_fit_range))
+        if self.reset_height_method == 1:
+            script += "o.reset_height_to_minimum()\n"
+        elif self.reset_height_method == 2:
+            script += "o.reset_height_to_central_value()\n"
+        if self.sigma_flag == 1:
+            script += "o.gaussian_filter(sigma_axis0=%r, sigma_axis1=%r)\n" % (self.sigma_axis0, self.sigma_axis1)
+
+        if self.invert_axes_names:
+            names = ("Y", "X", "INVERTED from ANSYS")
+        else:
+            names = ("X", "Y", "as in ANSYS")
+
+        script += """
+#
+# write OASYS surface file (invert_axes_names=1: X and Y names are swapped with respect to ANSYS)
+#
+o.write_h5_surface(filename=file_out, invert_axes_names=%d)
+print("File %%s written to disk." %% file_out)
+
+#
+# results: Z[ix, iy], shape (nx, ny) (axes as in ANSYS)
+#
+mesh = o.Z_INTERPOLATED
+x = o.x_interpolated
+y = o.y_interpolated
+
+slp = slopes(mesh, x, y, silent=0, return_only_rms=0)
+print("Heigh error StDev: %%g um" %% (1e6 * mesh.std()))
+""" % self.invert_axes_names
+
+        if self.extract_profile1D == 0:
+            profile_txt = """
+# 1D profile along axis 0, at the first axis-1 point >= coordinate_profile1D
+abscissas, perp_abscissas = x, y
+index0 = numpy.argwhere(perp_abscissas >= coordinate_profile1D)
+index0 = index0[0][0] if index0.size > 0 else -1
+profile1D = mesh[:, index0]
+"""
+            perp_name, abscissa_name = names[1], names[0]
+        else:
+            profile_txt = """
+# 1D profile along axis 1, at the first axis-0 point >= coordinate_profile1D
+abscissas, perp_abscissas = y, x
+index0 = numpy.argwhere(perp_abscissas >= coordinate_profile1D)
+index0 = index0[0][0] if index0.size > 0 else -1
+profile1D = mesh[index0, :]
+"""
+            perp_name, abscissa_name = names[0], names[1]
+
+        script += """
+coordinate_profile1D = %r # m
+""" % float(self.coordinate_profile1D) + profile_txt + """slope1D = numpy.gradient(profile1D, abscissas)
+dabam_profile = numpy.column_stack((abscissas, profile1D))  # as sent to "DABAM 1D Profile"
+
+#
+# plots
+#
+plot_image(mesh, x, y, title="file: %%s, axes %s" %% file_in,
+           xtitle="%s [m] (%%d pixels)" %% x.size, ytitle="%s [m] (%%d pixels)" %% y.size, aspect='auto', show=0)
+plot(abscissas, 1e6 * profile1D, title="profile at %s[%%d] = %%g; StDev = %%g um" %% (index0, perp_abscissas[index0], 1e6 * profile1D.std()),
+     xtitle="%s [m]", ytitle="Z [um]", show=0)
+plot(abscissas, 1e6 * slope1D, title="slopes at %s[%%d] = %%g; StDev = %%g urad" %% (index0, perp_abscissas[index0], 1e6 * slope1D.std()),
+     xtitle="%s [m]", ytitle="Z' [urad]", show=1)
+""" % (names[2], names[0], names[1], perp_name, abscissa_name, perp_name, abscissa_name)
+
+        self.python_script.set_code(script)
 
     def plot_and_send_results(self):
         if self.invert_axes_names:
