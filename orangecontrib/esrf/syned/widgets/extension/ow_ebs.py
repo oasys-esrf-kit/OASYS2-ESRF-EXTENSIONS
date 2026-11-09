@@ -13,7 +13,6 @@ from AnyQt.QtWidgets import QMessageBox, QApplication
 from AnyQt.QtCore import QRect
 
 from orangewidget import gui
-from orangewidget import widget
 from orangewidget.settings import Setting
 from orangewidget.widget import Output
 
@@ -172,9 +171,6 @@ class OWEBS(OWWidget):
 
     IMAGE_WIDTH = 860
     IMAGE_HEIGHT = 645
-
-    CONTROL_AREA_WIDTH = 405
-    TABS_AREA_HEIGHT = 650
 
     TABS_AREA_HEIGHT = 625
     CONTROL_AREA_WIDTH = 450
@@ -549,8 +545,8 @@ class OWEBS(OWWidget):
         self.electron_beam_beta_v = by
         self.electron_beam_alpha_h = ax
         self.electron_beam_alpha_v = ay
-        self.electron_beam_eta_h = ex
-        self.electron_beam_eta_v = ey
+        self.electron_beam_eta_h = 0.0
+        self.electron_beam_eta_v = 0.0
         self.electron_beam_etap_h = 0.0
         self.electron_beam_etap_v = 0.0
         self.electron_beam_emittance_h = 1.3166e-10
@@ -578,8 +574,8 @@ class OWEBS(OWWidget):
         self.electron_beam_beta_v = by
         self.electron_beam_alpha_h = ax
         self.electron_beam_alpha_v = ay
-        self.electron_beam_eta_h = ex
-        self.electron_beam_eta_v = ey
+        self.electron_beam_eta_h = 0.0
+        self.electron_beam_eta_v = 0.0
         self.electron_beam_etap_h = 0.0
         self.electron_beam_etap_v = 0.0
         self.electron_beam_emittance_h = 1.3166e-10
@@ -722,10 +718,10 @@ class OWEBS(OWWidget):
         txt += "================ electron parameters ===========\n"
         if self.type_of_properties == 0:
             txt += "from user 2nd Moments\n"
-        elif self.type_of_properties == 3:
+        elif self.type_of_properties == 2:
             txt += "from user Twiss Parameters\n"
-        elif self.type_of_properties == 4:
-            txt += "Zero emittance "
+        elif self.type_of_properties == 3:
+            txt += "Zero emittance\n"
         else:
             txt += "from Size/Divergence "
             if self.type_of_properties_initial_selection == 4:
@@ -942,6 +938,10 @@ class OWEBS(OWWidget):
             self.set_ebs_electron_beam_S28F()
 
         if self.ebs_id_index != 0:
+            if "HU" in self.get_id_list()[self.ebs_id_index]:
+                QMessageBox.warning(self, "Warning",
+                                    "Helical/Apple undulators not implemented in this app (wrong results)",
+                                    QMessageBox.Ok)
             self.populate_gap_parametrization()
             self.populate_magnetic_structure()
             self.gap_min = self.data_dict["id_minimum_gap_mm"][self.ebs_id_index - 1]
@@ -1047,6 +1047,7 @@ class OWEBS(OWWidget):
         xtitle = "Photon energy [keV]"
         ytitle = "Gap [mm]"
         colors = ['green', 'black', 'red', 'brown', 'orange', 'pink'] * self.harmonic_max
+        self.plot_canvas[2].clearCurves()  # drop harmonics above a (possibly reduced) harmonic_max
         for i in range(1, self.harmonic_max + 1):
             self.plot_canvas[2].addCurve(E1_array * i * 1e-3, gap_mm,
                                          "harmonic %d" % i,
@@ -1209,7 +1210,8 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
 
         Bmax = self.calculate_B_from_gap_and_A_vector(
             gap_mm, id_period_mm, id_name,
-            a0=a0, a1=a1, a2=a2, a3=a3, a4=a4, a5=a5, a6=a6)
+            a0=a0, a1=a1, a2=a2, a3=a3, a4=a4, a5=a5, a6=a6,
+            check_elliptical=False)  # the HU warning is shown once, in set_id()
 
         Kmax = Bmax * (id_period_mm * 1e-3) * codata.e / (2 * numpy.pi * codata.m_e * codata.c)
 
@@ -1262,8 +1264,8 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
             congruence.checkPositiveNumber(self.moment_ypyp, "Moment ypyp")
         elif self.type_of_properties == 1:
             congruence.checkPositiveNumber(self.electron_beam_size_h, "Horizontal Beam Size")
-            congruence.checkPositiveNumber(self.electron_beam_divergence_h, "Vertical Beam Size")
-            congruence.checkPositiveNumber(self.electron_beam_size_v, "Horizontal Beam Divergence")
+            congruence.checkPositiveNumber(self.electron_beam_divergence_h, "Horizontal Beam Divergence")
+            congruence.checkPositiveNumber(self.electron_beam_size_v, "Vertical Beam Size")
             congruence.checkPositiveNumber(self.electron_beam_divergence_v, "Vertical Beam Divergence")
         elif self.type_of_properties == 2:
             congruence.checkPositiveNumber(self.electron_beam_emittance_h, "Horizontal Beam Emittance")
@@ -1421,7 +1423,7 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
             a = numpy.genfromtxt(filename, dtype=str, delimiter=',', skip_header=3, skip_footer=1, converters=None, \
                                  missing_values={0: "11.000"}, filling_values={0: "XXX"}, usecols=None, names=None,
                                  excludelist=None, \
-                                 deletechars=" !#$%&'()*+, -./:;<=>?@[\]^{|}~", replace_space='', autostrip=True, \
+                                 deletechars=r" !#$%&'()*+, -./:;<=>?@[\]^{|}~", replace_space='', autostrip=True, \
                                  case_sensitive=True, defaultfmt='f%i', unpack=None, usemask=False, loose=True, \
                                  invalid_raise=True, max_rows=None, encoding='bytes')
 
@@ -1450,7 +1452,7 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
             for i in range(number_of_ids):
                 Bmax_i = self.calculate_B_from_gap_and_A_vector(
                     id_minimum_gap_mm[i], id_period_mm[i], id_name[i],
-                    a0=a0[i], a1=a1[i], a2=a2[i], a3=a3[i], a4=a4[i], a5=a5[i], a6=a5[i],
+                    a0=a0[i], a1=a1[i], a2=a2[i], a3=a3[i], a4=a4[i], a5=a5[i], a6=a6[i],
                     check_elliptical=False)
                 Bmax.append(Bmax_i)
                 Kmax.append(Bmax_i * id_period[i] * codata.e / (2 * numpy.pi * codata.m_e * codata.c))
@@ -1473,7 +1475,8 @@ plot(gap_mm, p_dens_peak, title="Power density peak at screen vs Gap", xtitle="G
             out_dict["a5"] = a5
             out_dict["a6"] = a6
 
-        except:
+        except Exception as exception:
+            print("Error reading ID database %s: %s. ID list will be empty." % (url, repr(exception)))
             out_dict = {}
             out_dict["straight_section"] = []
             out_dict["id_name"] = []
