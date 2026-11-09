@@ -3,18 +3,14 @@ import sys
 import numpy
 
 from AnyQt.QtCore import QRect, Qt
-from AnyQt.QtWidgets import (
-    QApplication, QMessageBox, QScrollArea, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QWidget, QLabel, QSizePolicy
-)
-from AnyQt.QtGui import QTextCursor, QFont, QPalette, QColor, QPainter, QBrush, QPen, QPixmap
-from AnyQt import QtGui
+from AnyQt.QtWidgets import QApplication, QMessageBox, QLabel, QSizePolicy
+from AnyQt.QtGui import QPixmap, QTextCursor
 
 from silx.gui.plot import Plot2D
 
 import orangecanvas.resources as resources
 
-from orangewidget import gui, widget
+from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Output
 
@@ -80,7 +76,6 @@ class OWConic(OWWidget):
     filename_h5 = Setting("conic.h5")
     cylindrize = Setting(0)
 
-    tab = []
     usage_path = os.path.join(
         resources.package_dirname("orangecontrib.esrf.syned.widgets.extension"),
         "misc", "conic_usage.png"
@@ -193,6 +188,7 @@ class OWConic(OWWidget):
     def check_fields(self):
         self.nx = congruence.checkStrictlyPositiveNumber(self.nx, "Points X")
         self.ny = congruence.checkStrictlyPositiveNumber(self.ny, "Points Y")
+        if self.nx < 2 or self.ny < 2: raise Exception("Points X and Points Y must be at least 2")
         self.theta = congruence.checkStrictlyPositiveNumber(self.theta, "Grazing angle")
         self.semilength_x = congruence.checkStrictlyPositiveNumber(self.semilength_x, "Half length X")
         self.semilength_y = congruence.checkStrictlyPositiveNumber(self.semilength_y, "Half length Y")
@@ -204,13 +200,22 @@ class OWConic(OWWidget):
         if initialize:
             self.profileInfo.setText(text)
         else:
-            cursor.movePosition(QtGui.QTextCursor.End)
+            cursor.movePosition(QTextCursor.MoveOperation.End)
             cursor.insertText(text)
 
     def calculate(self):
         self.writeStdOut(initialize=True)
+        old_stdout = sys.stdout
         sys.stdout = EmittingStream(textWritten=self.writeStdOut)
+        try:
+            self._calculate()
+        except Exception as exception:
+            QMessageBox.critical(self, "Error", str(exception), QMessageBox.StandardButton.Ok)
+            if self.IS_DEVELOP: raise exception
+        finally:
+            sys.stdout = old_stdout
 
+    def _calculate(self):
         self.check_fields()
 
         x = numpy.linspace(-self.semilength_x, self.semilength_x, self.nx)
@@ -231,7 +236,7 @@ class OWConic(OWWidget):
         # "Ellipsoid",
         # "Hyperboloid",
 
-        mirror_txt = "Conic"
+        mirror_txt = self.get_surface_list()[self.configuration]
         if self.get_surface_list()[self.configuration] == "Plane": #
             print("Method=s4_conic(**fixed**)")
             s4 = S4Conic.initialize_as_plane()
@@ -318,12 +323,11 @@ class OWConic(OWWidget):
         #
         # cyl?
         #
-        if self.cylindrize == 0:
-            pass
-        elif self.cylindrize == 1:
-            s4.set_cylindrical(0)
-        elif self.cylindrize == 2:
-            s4.set_cylindrical(numpy.pi/2)
+        if self.cylindrize in (1, 2):
+            # shadow4 renamed set_cylindrical() to _set_cylindrical(); support both
+            set_cylindrical = getattr(s4, "set_cylindrical", None) or getattr(s4, "_set_cylindrical")
+            set_cylindrical(0.0 if self.cylindrize == 1 else numpy.pi / 2)  # 0: meridional, pi/2: sagittal
+            mirror_txt += " (cylinder, %s)" % ("meridional" if self.cylindrize == 1 else "sagittal")
 
         #
         # display coeffs
@@ -333,9 +337,12 @@ class OWConic(OWWidget):
         for i in range(10):
             print("    ccc[%d] = %20.12g" % (i, ccc[i]))
 
-        print("\nConic coefficients (normalized): ")
-        for i in range(10):
-            print("    ccc[%d] = %20.12g" % (i, ccc[i]/ccc[0]))
+        if ccc[0] != 0:
+            print("\nConic coefficients (normalized to ccc[0]): ")
+            for i in range(10):
+                print("    ccc[%d] = %20.12g" % (i, ccc[i] / ccc[0]))
+        else:
+            print("\nccc[0] = 0: normalized coefficients not displayed.")
 
         #
         # numerical surface
@@ -346,30 +353,11 @@ class OWConic(OWWidget):
         write_surface_file(Z.T, x, y, self.filename_h5, overwrite=True)
         print("\nHDF5 file %s written to disk." % self.filename_h5)
 
-
-
-        # Z -= Ztor
-        #
-
-        #
-        #
-        # if self.detrend_toroid == 0:
-        #     Ztor = 0
-        # elif self.detrend_toroid == 1:  # detrend toroid
-        #     mirror_txt += " (sphere removed)"
-        #     Ztor = 0
-        # else:
-        #     raise Exception("Not implemented")
-
-
         self.plot_data2D(Z, x, y, self.tab[0],
-                         title="%s p:%6.3f m, q:%6.3f %6.3f mrad" %
-                               (mirror_txt, self.source_oe, self.oe_image, self.theta),
+                         title="%s p:%6.3f m, q:%6.3f m, theta:%6.3f mrad" %
+                               (mirror_txt, self.source_oe, self.oe_image, 1e3 * self.theta),
                          xtitle="x (sagittal) [m] (%d pixels)" % x.size,
                          ytitle="y (tangential) [m] (%d pixels)" % y.size)
-
-
-
 
         self.Outputs.SurfaceData.send(
                   OasysSurfaceData(xx=x,
@@ -379,10 +367,13 @@ class OWConic(OWWidget):
 
 
     def plot_data2D(self, data2D, dataX, dataY, canvas_widget_id, title="title", xtitle="X", ytitle="Y"):
-        try:
-            canvas_widget_id.layout().removeItem(canvas_widget_id.layout().itemAt(0))
-        except:
-            pass
+        # delete previous plot(s): removeItem() alone leaves the widget alive and visible
+        layout = canvas_widget_id.layout()
+        while layout.count() > 0:
+            old = layout.takeAt(0).widget()
+            if old is not None:
+                old.setParent(None)
+                old.deleteLater()
 
         origin = (dataX[0], dataY[0])
         scale = (dataX[1] - dataX[0], dataY[1] - dataY[0])
