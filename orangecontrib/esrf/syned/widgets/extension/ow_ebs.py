@@ -24,7 +24,7 @@ from oasys2.widget.gui import ConfirmDialog
 
 import orangecanvas.resources as resources
 
-from orangecontrib.wofry.widgets.gui.python_script import PythonScript  # NOTE: existing dependency
+from orangecontrib.esrf.util.python_script import PythonScript
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 
