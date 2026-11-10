@@ -27,7 +27,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 
-from orangecontrib.esrf.syned.util.FEA_File import FEA_File
+from srxraylib.profiles.FEA_File import FEA_File
 import orangecanvas.resources as resources
 from silx.gui.plot import Plot2D
 
@@ -358,7 +358,7 @@ class FiniteElementReader(OWWidget):
         # Python script reproducing the calculation done in _calculate() and plot_and_send_results()
         script = """
 import numpy
-from orangecontrib.esrf.syned.util.FEA_File import FEA_File
+from srxraylib.profiles.FEA_File import FEA_File
 from srxraylib.metrology.profiles_simulation import slopes
 from srxraylib.plot.gol import plot, plot_image
 
