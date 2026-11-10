@@ -280,10 +280,9 @@ class FiniteElementReader(OWWidget):
         self.set_file_out()
 
     def load_raw_data(self):
-        self.fea_file_object = FEA_File()
-        self.fea_file_object.set_filename(self.file_in)
-
-        self.fea_file_object.load_multicolumn_file(skiprows=self.file_in_skiprows, file_in_type=self.file_in_type, factorX=self.file_factor_x, factorY=self.file_factor_y, factorZ=self.file_factor_z)
+        self.fea_file_object = FEA_File(filename=self.file_in, file_in_type=self.file_in_type,
+                                        skiprows=self.file_in_skiprows, factorX=self.file_factor_x,
+                                        factorY=self.file_factor_y, factorZ=self.file_factor_z, load=True)
 
         self.fea_file_object.replicate_raw_data(self.replicate_raw_data_flag)
 
@@ -372,9 +371,7 @@ file_out = %r
 #
 # read data (file_in_type: 0=ALS cols: A X Y Z DX DY DZ, 1=ESRF cols: X,Y,Z,DX,DY,DZ, 2=OASYS surface file [hdf5])
 #
-o = FEA_File()
-o.set_filename(file_in)
-o.load_multicolumn_file(skiprows=%d, file_in_type=%d, factorX=%r, factorY=%r, factorZ=%r)
+o = FEA_File(file_in, skiprows=%d, file_in_type=%d, factorX=%r, factorY=%r, factorZ=%r, load=True)
 o.replicate_raw_data(%d) # 0=No, 1=along axis 0, 2=along axis 1, 3=along axes 0 and 1
 
 #
