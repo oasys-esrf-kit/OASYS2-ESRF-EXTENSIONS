@@ -234,12 +234,13 @@ class OWLensSurface(OWWidget):
             title = "Cumulated lens profile [m] R:%6.3f $\\mu$m" % (1e6 * self.lens_radius)
 
             foc_plane, shape, apert_h, apert_v, r_min, n, aperture = self.get_barc_inputs()
+            wall_thick = self.get_barc_wall_thickness()
             print("barc4ro.proj_thick_2D_crl inputs: foc_plane=%d (1=horizontal, 2=vertical, 3=both), "
-                  "shape=%d (1=parabolic), apert_h=%g m, apert_v=%g m, r_min=%g m, n=%d, aperture=%s" %
-                  (foc_plane, shape, apert_h, apert_v, r_min, n, aperture))
+                  "shape=%d (1=parabolic), apert_h=%g m, apert_v=%g m, r_min=%g m, n=%d, aperture=%s, wall_thick=%g m" %
+                  (foc_plane, shape, apert_h, apert_v, r_min, n, aperture, wall_thick))
 
             _, _, Z = proj_thick_2D_crl(foc_plane, shape, apert_h, apert_v, r_min, n,
-                                        _wall_thick=self.wall_thickness, _aperture=aperture,
+                                        _wall_thick=wall_thick, _aperture=aperture,
                                         _nx=self.nx, _ny=self.ny, _axis_x=x, _axis_y=y,
                                         isdgr=False, project=True)
             Z = Z.T * self.n_lenses  # barc4ro returns Z[iy, ix], shape (ny, nx): bring it to the internal (nx, ny)
@@ -271,6 +272,15 @@ class OWLensSurface(OWWidget):
         else:                         # rectangular
             aperture, apert_h, apert_v = "r", self.aperture_dimension_h, self.aperture_dimension_v
         return foc_plane, shape, apert_h, apert_v, r_min, n, aperture
+
+    def get_barc_wall_thickness(self):
+        """
+        _wall_thick for barc4ro: barc4ro adds _wall_thick/2 per curved surface ("hole"), so with a single hole
+        (plano-concave lens or parallel plate) the wall is doubled to get the widget's wall thickness
+        (minimum lens thickness) in the result.
+        """
+        n = self.get_barc_inputs()[5]
+        return self.wall_thickness * (2 if n == 1 else 1)
 
     def update_script(self):
         # Python script reproducing the calculation done in _calculate()
@@ -317,7 +327,7 @@ _, _, Z = proj_thick_2D_crl(
     %r, # _apert_v: vertical aperture [m]
     %r, # _r_min: radius at the parabola tip [m] (1e18 for a parallel plate)
     %d,      # _n: number of curved surfaces ("holes"): 1=plano-concave, 2=bi-concave
-    _wall_thick=wall_thickness,
+    _wall_thick=%s, # barc4ro adds _wall_thick/2 per hole
     _aperture=%r, # 'c'=circular, 'r'=rectangular
     _nx=nx, _ny=ny, _axis_x=x, _axis_y=y,
     isdgr=False, project=True)
@@ -325,7 +335,8 @@ _, _, Z = proj_thick_2D_crl(
 n_lenses = %d
 Z = Z.T * n_lenses  # barc4ro returns Z[iy, ix], shape (ny, nx)
 title = "Cumulated lens profile [m] R:%%6.3f $\\\\mu$m" %% (1e6 * %r)
-""" % (foc_plane, shape, float(apert_h), float(apert_v), float(r_min), n, aperture, self.n_lenses,
+""" % (foc_plane, shape, float(apert_h), float(apert_v), float(r_min), n,
+       "2 * wall_thickness" if n == 1 else "wall_thickness", aperture, self.n_lenses,
        float(self.lens_radius))
 
         script += """
