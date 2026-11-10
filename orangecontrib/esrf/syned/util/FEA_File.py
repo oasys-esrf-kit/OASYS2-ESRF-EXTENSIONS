@@ -40,10 +40,8 @@ from scipy import interpolate
 from scipy import spatial
 from scipy.interpolate import RectBivariateSpline
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-
-from srxraylib.plot.gol import plot_image
+# matplotlib (and srxraylib.plot) are imported only inside the plotting methods: reading, interpolating,
+# post-processing and writing do not need them.
 
 from oasys2.widget.util.widget_util import write_surface_file
 from oasys2.widget.util import congruence
@@ -435,6 +433,7 @@ class FEA_File():
 
     def plot_triangulation(self,show=True):
         """Plot the triangulation and the nodes (matplotlib); returns the figure."""
+        import matplotlib.pyplot as plt
         if self.tri is None: self.triangulate(force=True)
         fig = plt.figure()
         plt.triplot(self.Xdeformed(), self.Ydeformed() , self.tri.simplices.copy())
@@ -540,6 +539,8 @@ class FEA_File():
 
     def plot_interpolated(self, show=True):
         """Contour plot of the interpolated surface with the nodes (matplotlib); returns the figure."""
+        import matplotlib as mpl
+        import matplotlib.pyplot as plt
         fig = plt.figure()
         plt.contourf(self.get_Xinterpolated_mesh(), self.get_Yinterpolated_mesh(), self.Z_INTERPOLATED, 50, cmap = mpl.cm.jet)
         plt.colorbar()
@@ -554,6 +555,7 @@ class FEA_File():
 
     def plot_surface_image(self,invert_axes_names=False):
         """Image plot of the interpolated surface (srxraylib); invert_axes_names only changes the axis labels."""
+        from srxraylib.plot.gol import plot_image
         if invert_axes_names:
             plot_image(self.Z_INTERPOLATED,self.x_interpolated,self.y_interpolated ,title="file: %s, axes names INVERTED from ANSYS"%self.filename,
                        xtitle="Y (%d pixels, max:%f)"%(self.x_interpolated.size,self.x_interpolated.max()),
@@ -722,6 +724,7 @@ class FEA_File():
 
 def surface_plot(xs,ys,zs):
     """3D scatter plot of points (e.g. the output of FEA_File.get_deformed())."""
+    import matplotlib.pyplot as plt
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -735,6 +738,8 @@ def surface_plot(xs,ys,zs):
 
 
 if __name__ == "__main__":
+    from srxraylib.plot.gol import plot_image
+
     # demo: a synthetic OASYS surface file (Z[iy, ix] = tilt along x + circle along y)
     x = numpy.linspace(-0.05, 0.05, 101)
     y = numpy.linspace(-0.01, 0.01, 41)
