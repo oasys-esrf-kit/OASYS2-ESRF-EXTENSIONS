@@ -26,7 +26,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "OASYS2-ESRF-EXTENSIONS"
-version = "0.0.23"
+version = "0.0.24"
 description = "oasys2-esrf-extensions"
 readme = "README.md"
 
@@ -54,7 +54,7 @@ classifiers = [
 ]
 dependencies = [
     "oasys2>=0.0.61",
-    "shadow4>=0.2.0",
+    "shadow4>=0.2.1",
     "pandas",
     "numba",
     "oasys-barc4ro>=2026.7.16",
