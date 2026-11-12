@@ -47,6 +47,12 @@ INSTALL_MESSAGE = "Please install radionuclide-emission-db:\n\n %s -m pip instal
 # ~/.local/share/MIRDspecs (Linux, or $XDG_DATA_HOME/MIRDspecs), %LOCALAPPDATA%\MIRDspecs (Windows),
 # ~/Library/Application Support/MIRDspecs (macOS).
 #
+def _proxies_info():
+    """Proxies used by urllib (e.g. set by OASYS from Preferences/Network or the system settings)."""
+    import urllib.request
+    proxies = urllib.request.getproxies()
+    return "proxies used: %s" % (proxies if proxies else "none")
+
 def _csv_name(isotope):
     return "%s Summary Spectrum.csv" % isotope
 
@@ -86,7 +92,8 @@ def get_isotope_list(timeout=10, return_source=False):
     try:
         isotopes = sorted(available_isotopes(timeout=timeout), key=_isotope_sort_key)
     except Exception as e:
-        raise Exception("Cannot read the MIRDspecs index %s (network required):\n%s" % (INDEX_URL, str(e)))
+        raise Exception("Cannot read the MIRDspecs index %s (network required):\n%s\n(%s)" % (
+            INDEX_URL, str(e), _proxies_info()))
 
     source = "read from the MIRDspecs index %s" % INDEX_URL
     return (isotopes, source) if return_source else isotopes
@@ -113,7 +120,8 @@ def load_isotope(isotope, radiation_types=("Gamma", "X-ray", "Annihilation photo
         return _load(isotope, os.path.join(tempfile.gettempdir(), "MIRDspecs"), radiation_types, verbose)
     except RuntimeError as e:
         raise Exception("Could not download the MIRDspecs spectrum of %s (network needed the first "
-                        "time an isotope is used):\n%s" % (isotope, str(e)))
+                        "time an isotope is used):\n%s\n%s\n(%s)" % (isotope, str(e), str(e.__cause__ or ""),
+                                                                _proxies_info()))
     except ValueError:
         raise Exception("No photon lines of the selected radiation type(s) %s for %s" % (radiation_types, isotope))
 
@@ -258,6 +266,7 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
             if getattr(self, "isotope_%d" % i) not in self.isotope_list:
                 self.isotope_list = self.isotope_list + [getattr(self, "isotope_%d" % i)]
         super().__init__(show_script_tab=True)
+        self.update_script()  # script available before the calculation (e.g. for debugging)
 
     def build_gui(self):
 
@@ -475,7 +484,20 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
             else:
                 raise Exception("Empty Data")
 
+    def update_script(self):
+        """Fill the Script tab with the current inputs (no calculation, no network)."""
+        try:
+            time_factor = 1.0 if self.intensity_units == 0 else self.acquisition_time
+            script = self.script_template(self._isotopes_and_activities(), RADIATION_TYPES[self.radiation_type],
+                                          time_factor)
+        except Exception as e:
+            script = "# script not available: %s\n" % str(e)
+        self.xoppy_script.set_code(script)
+        return script
+
     def do_xoppy_calculation(self):
+
+        self.update_script()  # current inputs, even if the calculation fails
 
         if not RADIONUCLIDE_EMISSION_DB_INSTALLED:
             QMessageBox.information(self, "Missing installation", INSTALL_MESSAGE, QMessageBox.StandardButton.Ok)
@@ -546,8 +568,7 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
         print("    integrated flux: %g photons/s, integrated power: %g W" % (
             step * (density.sum() - 0.5 * (density[0] + density[-1])), binned[-1, 3]))
 
-        script = self.script_template(isotopes, radiation_types, time_factor)
-        self.xoppy_script.set_code(script)
+        script = self.update_script()
 
         return merged, binned, script, emitted
 
@@ -574,6 +595,10 @@ class OWisotopeSpectrum(XoppyWidget, WidgetDecorator):
 import numpy
 import scipy.constants as codata
 from radionuclide_emission_db import Radionuclide, Spectrum, EmissionLine
+
+# network check: list of isotopes from the MIRDspecs index (used by the widget, not needed here)
+# import urllib.request; print("proxies:", urllib.request.getproxies())
+# from radionuclide_emission_db import available_isotopes; print(len(available_isotopes()), "isotopes")
 
 cache_dir = {cache_dir}  # MIRDspecs CSV files are downloaded here when first used
 isotopes = {isotopes}  # (isotope, activity [Bq])
