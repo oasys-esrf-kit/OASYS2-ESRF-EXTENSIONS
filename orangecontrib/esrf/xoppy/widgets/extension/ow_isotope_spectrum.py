@@ -165,15 +165,21 @@ def filter_density(material, density):
 def get_filter(material, thickness_mm, density, verbose=False):
     """MaterialFilter (radionuclide-emission-db, NIST SRD 126 tables cached on demand)."""
     import xraylib
+    from radionuclide_emission_db.nist_cache import element_table
     directory = get_nist_directory()
     mf = material_filter(material, thickness_mm, density_g_cm3=filter_density(material, density),
                          attenuation_data_dir=directory)
-    if verbose: # info on the NIST tables used (the download, if needed, is done by the library)
-        formula = (MATERIALS.get(material.strip().lower()) or (material,))[0]
-        for z in xraylib.CompoundParser(formula)["Elements"]:
-            file = os.path.join(directory, "z%02d.json" % z)
+    formula = (MATERIALS.get(material.strip().lower()) or (material,))[0]
+    missing = False
+    for z in xraylib.CompoundParser(formula)["Elements"]:
+        file = os.path.join(directory, "z%02d.json" % z)
+        missing = missing or not os.path.exists(file)
+        if verbose: # info on the NIST tables used (the download, if needed, is done by the library)
             print("    Z=%d: %s %s" % (z, "read from cached file" if os.path.exists(file) else
                                        "downloaded from NIST and saved in", file))
+    # the library keeps the tables in memory (lru_cache) for the whole OASYS session: if a file was
+    # removed from the cache directory, clear it so that the table is downloaded and saved again
+    if missing: element_table.cache_clear()
     return mf
 
 def filters_transmission(energy_keV, filters):
