@@ -60,7 +60,7 @@ dependencies = [
     "oasys-barc4ro>=2026.7.16",
     "barc4shadow>=2026.7.22",
     "barc4beams>=2026.7.22",
-    # "spectrum-builder>=1.0.5",     # to be added in the future, now install manually
+    # "radionuclide-emission-db>=0.4.5",  # to be added in the future, now install manually (spectra downloaded on demand)
     # "accelerator-toolbox==0.6.1",  # in stand-by, gives problems in windows
 ]
 

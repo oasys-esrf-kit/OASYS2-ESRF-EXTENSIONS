@@ -1,0 +1,237 @@
+
+=============================  ISOTOPE SPECTRUM  ==============================
+
+This widget computes the photon emission lines (gamma rays, X-rays and
+annihilation photons) of up to three radionuclides, weighted by their
+activities. The result can be plotted, exported, or sent to the XOPPY POWER
+widget to compute the power transmitted through filters.
+
+The data come from MIRDspecs (https://mirdsoft.org/products/MIRDspecs), based
+on the ICRP Publication 107 nuclear decay data. Access is through the python
+package radionuclide-emission-db (C. Karafasoulis), which must be installed:
+
+     python -m pip install radionuclide-emission-db
+
+
+NETWORK AND CACHE
+-----------------
+
+- The list of available isotopes (~1250) is read from the MIRDspecs index
+  (https://mirdsoft.org/resources/mirdspecs) every time the widget is opened.
+  A network connection is therefore required. If the list cannot be read the
+  widget opens, but the calculation stops with an error message.
+
+- The spectrum of each isotope is downloaded the first time it is used, and
+  saved in a cache directory. Following calculations read the cached file.
+  The cache directory is (same convention as DABAX):
+
+      Linux:   ~/.local/share/MIRDspecs   (or $XDG_DATA_HOME/MIRDspecs)
+      macOS:   ~/Library/Application Support/MIRDspecs
+      Windows: %LOCALAPPDATA%\MIRDspecs
+
+  If that directory is not writable, a temporary directory is used.
+  The NIST attenuation tables used by the internal filters are also
+  downloaded on demand (one file per element) and cached in the
+  sub-directory nist-attenuation of the cache directory.
+  The cache can be safely deleted at any time; files are downloaded again
+  when needed. The Output tab shows the cache directory and, for every
+  isotope, whether its spectrum was read from the cache or downloaded.
+
+
+INPUT PARAMETERS
+----------------
+
+Number of isotopes:  1, 2 or 3 isotopes are mixed.
+
+Isotope i:  name of the isotope, e.g. Cs-137, Ba-137m, Co-60, Am-241
+    (type in the combo box to search).
+
+Activity i [Bq]:  activity of isotope i (decays/s). Note that daughters are
+    NOT added automatically: e.g., the 661.7 keV gamma line of Cs-137 is
+    emitted by its daughter Ba-137m, so Cs-137 must be combined with Ba-137m
+    with activity 0.944 x A(Cs-137) (secular equilibrium, branching ratio).
+
+Radiation type:  every MIRDspecs line is labelled with a type. The particle
+    lines (alpha, beta, positron, Auger and conversion electrons) are always
+    ignored. Among the photon lines, one selects:
+
+      All photons                          Gamma + X-ray + Annihilation photon
+      Gamma [from nucleus] + annihilation  Gamma + Annihilation photon
+      X-ray [from atomic shells]           X-ray
+
+    - Gamma: nuclear de-excitation (e.g. 661.7 keV of Ba-137m,
+      1173 and 1332 keV of Co-60).
+    - X-ray: emitted by the atomic shells after electron capture or internal
+      conversion (e.g. Ba K lines ~32 keV after Cs-137 decay). They include
+      many L, M... lines of very low energy (tens or hundreds of eV) with
+      large yield. They dominate the number of photons per decay but carry
+      little power.
+    - Annihilation photon: the 511 keV photons from positron annihilation
+      (e.g. F-18, yield 1.93 = 2 x positron yield).
+
+    If an isotope has no lines of the selected type, an error is raised.
+
+Intensity units:  Photons/s, or Photons in acquisition time
+    (= photons/s x acquisition time).
+
+Acquisition time [s]:  used only with "Photons in acquisition time".
+
+Energy min, Energy max [keV]:  only lines with
+    Energy min <= E <= Energy max  are kept (limits included). This is a
+    simple cut of the lines. It also defines the range of the energy grid
+    of the binned spectrum (see below). Energy min must be > 0.
+
+Binning of the energy grid:  the regular energy grid of the binned
+    spectrum starts at Energy min and is defined by either:
+    - Number of energy points: the grid ends at Energy max, and the step is
+      (Energy max - Energy min) / (number of points - 1).
+    - Bin size [keV]: the step is exactly the bin size; the last point is the
+      first one >= Energy max (it may exceed Energy max by less than one
+      step), so that all lines up to Energy max are inside the grid.
+
+Internal filters:  None, 1, 2 or 3 filters applied to the emission lines,
+    e.g. to account for the source encapsulation or self-absorption.
+    For each filter: material, thickness [mm] and density [g/cm3].
+
+    Materials: there is no fixed list. Valid materials are:
+    - any element with Z = 1 to 92 (the range of the NIST tables), given by
+      its symbol, e.g. Be, Al, Ta, Au, Pb;
+    - any compound formula that can be read by the xraylib CompoundParser,
+      e.g. H2O, SiO2, C2H4, Cd0.9Zn0.1Te (elements with Z <= 92 only);
+    - the following names (case insensitive) known by
+      radionuclide-emission-db, with their default density:
+
+          name(s)                     formula          density [g/cm3]
+          pb, lead                    Pb               11.34
+          al, aluminum, aluminium     Al                2.70
+          fe, iron                    Fe                7.874
+          cu, copper                  Cu                8.96
+          w, tungsten                 W                19.25
+          si, silicon                 Si                2.329
+          h2o, water                  H2O               1.0
+          nai                         NaI               3.67
+          czt                         Cd0.9Zn0.1Te      5.78
+
+    Density: "?" means default: the density in the table above if the
+    material is one of these names, otherwise the density of the element
+    from xraylib. For any other compound the density must be entered.
+
+    Filtering mechanism: Beer-Lambert law (narrow beam), using the total
+    cross section. For every line of energy E, and every filter of
+    thickness t and density rho, the line intensity is multiplied by the
+    transmission
+
+        T(E) = exp( - (mu/rho)(E) x rho x t )
+
+    The intensity after n filters is I = I0 x T1(E) x T2(E) x ... x Tn(E).
+
+    (mu/rho)(E) [cm2/g] is the total mass attenuation coefficient, i.e.
+    the total cross section per unit mass, from the NIST SRD 126 tables
+    (X-Ray Mass Attenuation Coefficients, J.H. Hubbell and S.M. Seltzer).
+    It includes all the interactions that remove a photon from the beam:
+    photoelectric absorption, coherent (Rayleigh) and incoherent (Compton)
+    scattering and pair production. All scattered photons are considered
+    lost: there is no build-up of scattered photons, which is correct for a
+    narrow beam (collimated source and detector) but underestimates the
+    transmitted photons for a broad beam and thick filters.
+
+    Details of the calculation (as implemented in radionuclide-emission-db):
+    - The NIST table of each element is downloaded on demand and cached
+      (see NETWORK AND CACHE).
+    - (mu/rho) at the line energy is interpolated log-log between the
+      tabulated energies. At an absorption edge (duplicated energy in the
+      table) the value above the edge is used.
+    - For compounds, the mixture rule is used:
+          (mu/rho) = sum_i  w_i (mu/rho)_i
+      with w_i the mass fraction of element i (from xraylib CompoundParser).
+    - The NIST tables cover 1 keV - 20 MeV. Lines below 1 keV are removed
+      when filters are used (transmission 0); their number is reported in
+      the Output tab. (In practice, such soft photons are absorbed by any
+      filter of a realistic thickness.)
+
+    The filtered lines are used for the binned spectrum sent to POWER.
+    Filters can also be applied in the POWER widget (with xraylib/DABAX
+    attenuation): be careful not to apply the same filter twice.
+
+OUTPUT
+------
+
+There are four plot tabs:
+
+1) Emission lines: the lines are NOT binned. Every line is drawn as a
+   vertical stick from 0 to its intensity:
+      yield [photons/decay] x activity [Bq] (x acquisition time [s])
+      ->  photons/s (or photons in the acquisition time)
+   The stick height is the number of photons (/s) in that line; there is no
+   line width and no "per eV" density. Lines with the same energy (e.g. the
+   same line from different isotopes) are summed.
+   With internal filters, the emitted lines are in blue and the lines after
+   the filters in red.
+
+2) Flux [photons/s/0.1%bw]
+3) Spectral Power [W/eV]
+4) Cumulated Power [W]
+
+   Tabs 2-4 show the binned spectrum, in the standard XOPPY format for
+   sources. It is the spectrum sent to POWER.
+   It is made from the lines after the internal filters (if any).
+   It is always per second (independent of the intensity units).
+
+   Binning: each line at energy E, between the grid points E_k and E_k+1,
+   is shared between these two points with linear weights (1-f) and f,
+   with f = (E - E_k) / step. This preserves both the number of photons and
+   the power (the weighted mean of E_k and E_k+1 is E). The densities are
+   obtained dividing by the step (photons/s/eV), and the values at the two
+   end points of the grid are doubled, because the trapezoid integration
+   rule (used by POWER) gives them half weight. In this way, the integrals
+   of the binned spectrum give exactly the totals of the lines:
+      Flux     = photons/s/eV x 1e-3 x E           [photons/s/0.1%bw]
+      Spectral power = photons/s/eV x E x e        [W/eV]
+      Cumulated power = integral of the spectral power from Energy min [W]
+   The last value of the cumulated power is the total power of the lines.
+   The binning places the photons of a line on the grid points around it,
+   so finer details (e.g. attenuation edges between two grid points) are
+   resolved only with a step small enough.
+
+Output tab:  cache and source information, the table of all lines (energy,
+   intensity, type, isotope), the number of lines, the total (sum of lines)
+   in photons/s and its power in W (or photons and energy in J for the
+   acquisition time), and the binned grid with its integrated flux and power
+   (equal to the totals of the lines). With internal filters, also the
+   filters used (with the density and the NIST tables), a table of the
+   lines with emitted intensity, transmission and intensity after filters,
+   the totals after filters and the transmitted fractions of photons and
+   power.
+
+Script tab:  a python script reproducing the calculation with
+   radionuclide-emission-db, including the binned spectrum.
+
+Data sent (DataExchangeObject, named "BLACK_BODY" so that POWER accepts it):
+   xoppy_data:  array (npoints, 4): energy [eV], flux [photons/s/0.1%bw],
+                spectral power [W/eV], cumulated power [W]
+   xoppy_data_lines:  array (nlines, 2): energy [eV], intensity of the
+                summed lines (photons/s, or photons), after filters
+   xoppy_data_lines_emitted:  the same, before filters
+
+
+CONNECTION WITH POWER
+---------------------
+
+Connect the output to the XOPPY POWER widget to compute absorbed and
+transmitted power through filters/mirrors. POWER uses the spectral power
+column [W/eV] of the binned spectrum. POWER needs attenuation data at all
+the grid energies: an Energy min below ~1 keV may not be covered by the
+material tables, and POWER will then raise an error (e.g. "Spline
+extrapolation is not allowed"). In this case increase Energy min.
+
+
+REFERENCES
+----------
+
+- ICRP Publication 107: Nuclear Decay Data for Dosimetric Calculations.
+  Ann. ICRP 38 (3), 2008.
+- MIRDspecs: https://mirdsoft.org/products/MIRDspecs
+- NIST SRD 126, X-Ray Mass Attenuation Coefficients (Hubbell and Seltzer):
+  https://physics.nist.gov/PhysRefData/XrayMassCoef/
+- radionuclide-emission-db: https://pypi.org/project/radionuclide-emission-db
+
