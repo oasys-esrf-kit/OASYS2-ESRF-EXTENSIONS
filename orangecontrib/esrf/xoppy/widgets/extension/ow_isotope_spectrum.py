@@ -77,6 +77,23 @@ def _isotope_sort_key(isotope):
     element, mass = isotope.split("-")
     return element, int(mass.rstrip("m")), mass.endswith("m")
 
+def _read_url(url, timeout):
+    """
+    Read a URL with a fresh urllib opener (honouring the proxy environment variables), so that the
+    request does not depend on a global opener installed by other packages (e.g. dabax installs one
+    with an unverified SSL context). HTTP errors report the server and the beginning of its answer.
+    """
+    import urllib.request
+    from urllib.error import HTTPError
+    request = urllib.request.Request(url, headers={"User-Agent": "radionuclide-emission-db/0.4.5 (research tool)"})
+    try:
+        with urllib.request.build_opener().open(request, timeout=timeout) as response:
+            return response.read().decode("utf-8", errors="replace")
+    except HTTPError as e:
+        try:    body = e.read()[:200].decode("utf-8", errors="replace").replace("\n", " ")
+        except: body = ""
+        raise Exception("HTTP Error %s: %s (server: %s)\n%s" % (e.code, e.reason, e.headers.get("server"), body))
+
 def get_isotope_list(timeout=10, return_source=False):
     """
     List of the isotopes in MIRDspecs, sorted by element and mass number, always read on-the-fly
@@ -86,11 +103,14 @@ def get_isotope_list(timeout=10, return_source=False):
     With return_source=True, returns (isotopes, source), source being a text saying where the
     list comes from.
     """
-    from radionuclide_emission_db import available_isotopes
-    from radionuclide_emission_db.cache import INDEX_URL
+    from radionuclide_emission_db.cache import INDEX_URL, _IndexParser  # parser of the index page
 
     try:
-        isotopes = sorted(available_isotopes(timeout=timeout), key=_isotope_sort_key)
+        parser = _IndexParser()
+        parser.feed(_read_url(INDEX_URL, timeout))
+        if not parser.names:
+            raise Exception("No isotopes found in the MIRDspecs index; page format may have changed")
+        isotopes = sorted(parser.names, key=_isotope_sort_key)
     except Exception as e:
         raise Exception("Cannot read the MIRDspecs index %s (network required):\n%s\n(%s)" % (
             INDEX_URL, str(e), _proxies_info()))
