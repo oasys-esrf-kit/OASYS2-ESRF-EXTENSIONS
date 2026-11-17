@@ -573,6 +573,12 @@ class OWPhaseDeflector(OWOpticalElement):
             else:
                 QMessageBox.warning(self, "Warning", "Incompatible PreProcessor Data", QMessageBox.Ok)
 
+    def _post_trace_operations(self, output_beam, footprint, element, beamline):
+        super()._post_trace_operations(output_beam, footprint, element, beamline)
+        # At normal incidence the element plane is perpendicular to beam Y.
+        self._incident_footprint = element.get_input_beam().duplicate()
+        self._incident_footprint.retrace(element.get_coordinates().p(), resetY=True)
+
     def _plot_results(self, output_beam, footprint, progressBarValue=80):
         if not self.view_type == 2:
             if ShadowCongruence.check_empty_beam(output_beam):
@@ -594,14 +600,14 @@ class OWPhaseDeflector(OWOpticalElement):
                         self._plot_xy_preview(output_beam, progressBarValue + 12, variables[2][0], variables[2][1], plot_canvas_index=2, title=titles[2], xtitle=xtitles[2], ytitle=ytitles[2])
                         self._plot_xy_preview(output_beam, progressBarValue + 16, variables[3][0], variables[3][1], plot_canvas_index=3, title=titles[3], xtitle=xtitles[3], ytitle=ytitles[3])
                         self._plot_histo_preview(output_beam, progressBarValue + 20, variables[4], plot_canvas_index=4, title=titles[4], xtitle=xtitles[4], ytitle=ytitles[4])
-                        self._plot_xy_preview(footprint, progressBarValue + 20, 1, 3, plot_canvas_index=5, title="Footprint", xtitle="X [m]", ytitle="Z [m]", is_footprint=True)
+                        self._plot_xy_preview(self._incident_footprint, progressBarValue + 20, 1, 3, plot_canvas_index=5, title="Incident beam at phase deflector", xtitle="X [m]", ytitle="Z [m]", is_footprint=True)
                     elif self.view_type == 0:
                         self._plot_xy_detailed(output_beam, progressBarValue + 4, variables[0][0], variables[0][1], plot_canvas_index=0, title=titles[0], xtitle=xtitles[0], ytitle=ytitles[0], xum=xums[0], yum=yums[0])
                         self._plot_xy_detailed(output_beam, progressBarValue + 8, variables[1][0], variables[1][1], plot_canvas_index=1, title=titles[1], xtitle=xtitles[1], ytitle=ytitles[1], xum=xums[1], yum=yums[1])
                         self._plot_xy_detailed(output_beam, progressBarValue + 12, variables[2][0], variables[2][1], plot_canvas_index=2, title=titles[2], xtitle=xtitles[2], ytitle=ytitles[2], xum=xums[2], yum=yums[2])
                         self._plot_xy_detailed(output_beam, progressBarValue + 16, variables[3][0], variables[3][1], plot_canvas_index=3, title=titles[3], xtitle=xtitles[3], ytitle=ytitles[3], xum=xums[3], yum=yums[3])
                         self._plot_histo_detailed(output_beam, progressBarValue + 20, variables[4], plot_canvas_index=4, title=titles[4], xtitle=xtitles[4], ytitle=ytitles[4], xum=xums[4])
-                        self._plot_xy_detailed(footprint, progressBarValue + 20, 1, 3, plot_canvas_index=5, title="Footprint", xtitle="X [m]", ytitle="Z [m]", xum="X [m]", yum="Z [m]", is_footprint=True)
+                        self._plot_xy_detailed(self._incident_footprint, progressBarValue + 20, 1, 3, plot_canvas_index=5, title="Incident beam at phase deflector", xtitle="X [m]", ytitle="Z [m]", xum="X [m]", yum="Z [m]", is_footprint=True)
                 except Exception as exception:
                     self.view_type_combo.setEnabled(True)
                     raise Exception("Data not plottable: No good rays or bad content\nexception: " + str(exception))
