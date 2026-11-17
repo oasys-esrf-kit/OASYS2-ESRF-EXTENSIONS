@@ -49,6 +49,7 @@ class OWPhaseDeflector(OWOpticalElement):
     description = "Shadow4 phase deflector element"
     icon = "icons/phase_deflector.png"
     priority = 3
+    settings_version = 2
     keywords = ["barc", "shadow4", "phase", "deflector", "thickness"]
 
     class Inputs:
@@ -69,11 +70,10 @@ class OWPhaseDeflector(OWOpticalElement):
         )
 
     surface_data_file = Setting(NO_FILE_SPECIFIED)
+    apply_to_lost = Setting(1)
     thickness_scaling = Setting(1.0)
     coordinate_scaling = Setting(1.0)
-    invert_surface = Setting(0)
-    shift_thickness_to_zero = Setting(0)
-    apply_to_lost = Setting(1)
+    subtract_minimum_thickness = Setting(0)
 
     aperturing = Setting(0)
     aperture_shape = Setting(1)
@@ -91,6 +91,14 @@ class OWPhaseDeflector(OWOpticalElement):
 
     DABAX_F1F2_FILE_INDEX = Setting(0)
     DABAX_CROSSSEC_FILE_INDEX = Setting(0)
+
+    @classmethod
+    def migrate_settings(cls, settings, version):
+        super().migrate_settings(settings, version)
+        if settings.pop("invert_surface", 0):
+            settings["thickness_scaling"] = -settings.get("thickness_scaling", 1.0)
+        if "shift_thickness_to_zero" in settings:
+            settings.setdefault("subtract_minimum_thickness", settings.pop("shift_thickness_to_zero"))
 
     def __init__(self):
         super().__init__(has_footprint=True, show_tab_advanced_settings=True)
@@ -201,6 +209,17 @@ class OWPhaseDeflector(OWOpticalElement):
             width=65,
             tooltip="Render data in image mode [slow]",
         )
+        gui.comboBox(
+            box,
+            self,
+            "apply_to_lost",
+            label="Apply to lost rays",
+            labelWidth=250,
+            items=["No", "Yes"],
+            sendSelectedValue=False,
+            orientation="horizontal",
+            tooltip="apply_to_lost",
+        )
         oasysgui.lineEdit(
             box, self, "thickness_scaling", "Thickness scaling",
             tooltip="thickness_scaling", labelWidth=250, valueType=float,
@@ -212,32 +231,15 @@ class OWPhaseDeflector(OWOpticalElement):
             orientation="horizontal",
         )
         gui.comboBox(
-            box, self, "invert_surface", label="Invert surface",
-            labelWidth=250, items=["No", "Yes"], sendSelectedValue=False,
-            orientation="horizontal", tooltip="invert_surface",
-        )
-
-        gui.comboBox(
             box,
             self,
-            "shift_thickness_to_zero",
-            label="Shift thickness to zero",
+            "subtract_minimum_thickness",
+            label="Subtract minimum thickness",
             labelWidth=250,
             items=["No", "Yes"],
             sendSelectedValue=False,
             orientation="horizontal",
-            tooltip="shift_thickness_to_zero",
-        )
-        gui.comboBox(
-            box,
-            self,
-            "apply_to_lost",
-            label="Apply to lost rays",
-            labelWidth=250,
-            items=["No", "Yes"],
-            sendSelectedValue=False,
-            orientation="horizontal",
-            tooltip="apply_to_lost",
+            tooltip="subtract_minimum_thickness",
         )
 
     def populate_tab_aperture(self, tab):
@@ -494,16 +496,15 @@ class OWPhaseDeflector(OWOpticalElement):
             surface_data_file=self.surface_data_file,
             material=self.material,
             density=self.density,
-            f_r_ind=self.ri_calculation_mode,
-            file_r_ind=self.prerefl_file,
-            r_ind=self.refraction_index,
-            r_attenuation=self.attenuation_coefficient,
+            ri_calculation_mode=self.ri_calculation_mode,
+            prerefl_file=self.prerefl_file,
+            refraction_index=self.refraction_index,
+            attenuation_coefficient=self.attenuation_coefficient,
             dabax=dabax,
             apply_to_lost=self.apply_to_lost == 1,
-            shift_thickness_to_zero=self.shift_thickness_to_zero == 1,
             thickness_scaling=self.thickness_scaling,
             coordinate_scaling=self.coordinate_scaling,
-            invert_surface=self.invert_surface == 1,
+            subtract_minimum_thickness=self.subtract_minimum_thickness == 1,
         )
 
     def get_beamline_element_instance(self):
@@ -543,10 +544,9 @@ class OWPhaseDeflector(OWOpticalElement):
             raise ValueError("No thickness map file specified.")
         optical_element = S4NumericalMeshPhaseDeflector(
             surface_data_file=self.surface_data_file,
-            shift_thickness_to_zero=self.shift_thickness_to_zero == 1,
             thickness_scaling=self.thickness_scaling,
             coordinate_scaling=self.coordinate_scaling,
-            invert_surface=self.invert_surface == 1,
+            subtract_minimum_thickness=self.subtract_minimum_thickness == 1,
         )
         data = optical_element.get_thickness_map(validate=False)
         temporary = tempfile.NamedTemporaryFile(suffix=".h5", delete=False)
