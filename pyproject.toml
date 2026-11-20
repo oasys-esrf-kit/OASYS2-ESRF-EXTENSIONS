@@ -54,7 +54,7 @@ classifiers = [
 ]
 dependencies = [
     "oasys2>=0.0.61",
-    "shadow4>=0.2.1",
+    "shadow4>=0.2.2",
     "pandas",
     "numba",
     "oasys-barc4ro>=2026.7.16",
