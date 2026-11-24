@@ -3,7 +3,7 @@ import copy
 import io
 
 from orangewidget import gui
-from orangewidget.widget import Input, Output
+from orangewidget.widget import Input
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 from oasys2.widget import gui as oasysgui
@@ -17,7 +17,7 @@ from orangecontrib.shadow4.util.shadow4_objects import ShadowData
 class OWBeamInfo(OWWidget):
     name = "Beam Info"
     description = "Convert Shadow4 data to a barc4beams Beam and print statistics"
-    icon = "icons/uicons_info.png"
+    icon = "icons/information.png"
     priority = 1
     keywords = ["barc", "barc4beams", "beam", "statistics", "shadow4"]
 
@@ -25,9 +25,6 @@ class OWBeamInfo(OWWidget):
 
     class Inputs:
         shadow_data = Input("Shadow Data", ShadowData, default=True, auto_summary=False)
-
-    class Outputs:
-        beam = Output("BARC Beam", Beam, default=True, auto_summary=False)
 
     def __init__(self):
         super().__init__()
@@ -52,7 +49,7 @@ class OWBeamInfo(OWWidget):
             orientation="vertical",
             width=390,
         )
-        gui.label(info_box, self, "Accepts Shadow Data and outputs a barc4beams Beam.")
+        gui.label(info_box, self, "Accepts Shadow Data and displays beam statistics.")
 
         self.stats_output = oasysgui.textArea(height=560, width=760)
         output_box = gui.widgetBox(
@@ -89,11 +86,9 @@ class OWBeamInfo(OWWidget):
             self.stats_output.setText(stats_text)
             print(stats_text)
 
-            self.Outputs.beam.send(self._barc_beam)
-            self.setStatusMessage("BARC Beam emitted.")
+            self.setStatusMessage("Beam statistics updated.")
         except Exception as exception:
             self._barc_beam = None
-            self.Outputs.beam.send(None)
             self.stats_output.setText(str(exception))
             self.setStatusMessage(str(exception))
 

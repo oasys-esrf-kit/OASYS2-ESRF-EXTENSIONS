@@ -1,7 +1,7 @@
+from AnyQt.QtGui import QFontDatabase
 from AnyQt.QtWidgets import QWidget, QVBoxLayout
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import Input
@@ -11,16 +11,17 @@ from oasys2.widget import gui as oasysgui
 from oasys2.widget.gui import MessageDialog, Styles
 from oasys2.widget.widget import OWWidget
 
-from barc4shadow.beamline import s4_beamline_to_layout
+from barc4shadow.beamline import layout_information, s4_beamline_to_layout
 from barc4shadow.viz import plot_beamline
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
+from orangecontrib.esrf.util.matplotlib_tools import SnapshotNavigationToolbar
 
 
 class OWBeamlineLayout(OWWidget):
     name = "Beamline Layout"
     description = "Plot a SHADOW4 beamline layout with barc4shadow"
     icon = "icons/uicons_progress-bar-dotted-line-half.png"
-    priority = 4
+    priority = 5
     keywords = ["barc", "barc4shadow", "beamline", "layout", "shadow4"]
 
     want_main_area = 1
@@ -37,8 +38,8 @@ class OWBeamlineLayout(OWWidget):
         super().__init__()
 
         self._shadow_data = None
-        self._canvases = []
-        self._figures = []
+        self._canvas = None
+        self._figure = None
 
         button_box = oasysgui.widgetBox(
             self.controlArea,
@@ -63,6 +64,24 @@ class OWBeamlineLayout(OWWidget):
         gui.checkBox(settings_box, self, "draw_to_scale", "Draw to scale")
 
         self.plot_tabs = oasysgui.tabWidget(self.mainArea)
+        plot_tab = oasysgui.createTabPage(self.plot_tabs, "Beamline Layout")
+        distances_tab = oasysgui.createTabPage(self.plot_tabs, "Distances Summary")
+
+        self.plot_container = QWidget()
+        self.plot_layout = QVBoxLayout(self.plot_container)
+        plot_tab.layout().addWidget(self.plot_container)
+
+        self.distances_summary = oasysgui.textArea(height=560, noWrap=True)
+        self.distances_summary.setFont(
+            QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        )
+        distances_box = gui.widgetBox(
+            distances_tab,
+            "",
+            addSpace=True,
+            orientation="horizontal",
+        )
+        distances_box.layout().addWidget(self.distances_summary)
 
         gui.rubber(self.controlArea)
 
@@ -84,6 +103,10 @@ class OWBeamlineLayout(OWWidget):
                 raise ValueError("Shadow Data does not contain an S4 beamline.")
 
             layout = s4_beamline_to_layout(self._shadow_data.beamline)
+            distances_text = layout_information(
+                self._shadow_data.beamline,
+                verbose=False,
+            )
 
             self._clear_plots()
             fig, _ = plot_beamline(
@@ -94,10 +117,12 @@ class OWBeamlineLayout(OWWidget):
                 draw_to_scale=bool(self.draw_to_scale),
                 plot=False,
             )
-            self._add_figure_tab("Beamline Layout", fig)
+            self._set_figure(fig)
+            self.distances_summary.setText(distances_text)
 
             self.setStatusMessage("Beamline layout updated.")
         except Exception as exception:
+            self.distances_summary.setText(str(exception))
             self.setStatusMessage(str(exception))
             MessageDialog.message(
                 parent=self,
@@ -106,29 +131,28 @@ class OWBeamlineLayout(OWWidget):
                 message=str(exception),
             )
 
-    def _add_figure_tab(self, title, figure):
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
+    def _set_figure(self, figure):
         canvas = FigureCanvas(figure)
-        toolbar = NavigationToolbar(canvas, tab)
-        layout.addWidget(toolbar)
-        layout.addWidget(canvas)
-        self.plot_tabs.addTab(tab, title)
-        self._canvases.append(canvas)
-        self._figures.append(figure)
+        toolbar = SnapshotNavigationToolbar(canvas, self.plot_container)
+        self.plot_layout.addWidget(toolbar)
+        self.plot_layout.addWidget(canvas)
+        self._canvas = canvas
+        self._figure = figure
         canvas.draw()
 
     def _clear_plots(self):
-        for figure in self._figures:
-            plt.close(figure)
+        if self._figure is not None:
+            plt.close(self._figure)
 
-        self._canvases = []
-        self._figures = []
+        self._canvas = None
+        self._figure = None
 
-        while self.plot_tabs.count() > 0:
-            widget = self.plot_tabs.widget(0)
-            self.plot_tabs.removeTab(0)
-            widget.deleteLater()
+        while self.plot_layout.count() > 0:
+            item = self.plot_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
 
 
 add_widget_parameters_to_module(__name__)

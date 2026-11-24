@@ -2,10 +2,9 @@ from AnyQt.QtWidgets import QWidget, QVBoxLayout
 import copy
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from orangewidget import gui
 from orangewidget.settings import Setting
-from orangewidget.widget import Input, Output
+from orangewidget.widget import Input
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 from oasys2.widget import gui as oasysgui
@@ -21,8 +20,10 @@ from barc4beams.viz import (
     plot_intensity,
     plot_phase_space,
     plot_rays,
+    plot_rays_divergence,
 )
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
+from orangecontrib.esrf.util.matplotlib_tools import SnapshotNavigationToolbar
 
 
 COLOR_MAPS = ["viridis", "plasma", "turbo", "magma", "terrain"]
@@ -31,7 +32,7 @@ COLOR_MAPS = ["viridis", "plasma", "turbo", "magma", "terrain"]
 class OWBeamPlot(OWWidget):
     name = "Beam Plot"
     description = "Plot a barc4beams Beam"
-    icon = "icons/uicons_chart-scatter.png"
+    icon = "icons/chart.png"
     priority = 2
     keywords = ["barc", "barc4beams", "beam", "plot", "divergence", "phase space"]
 
@@ -39,9 +40,6 @@ class OWBeamPlot(OWWidget):
 
     class Inputs:
         shadow_data = Input("Shadow Data", ShadowData, default=True, auto_summary=False)
-
-    class Outputs:
-        beam = Output("BARC Beam", Beam, default=True, auto_summary=False)
 
     plot_type = Setting(0)
     phase_direction = Setting(2)
@@ -93,13 +91,14 @@ class OWBeamPlot(OWWidget):
             label="Plot",
             labelWidth=160,
             items=[
-                "Beam",
-                "Divergence",
+                "Beam Distribution",
+                "Beam Divergence",
                 "Phase Space",
                 "Energy",
                 "Intensity",
                 "Energy vs Intensity",
-                "Rays",
+                "Rays Distribution",
+                "Rays Divergence",
             ],
             sendSelectedValue=False,
             orientation="horizontal",
@@ -292,11 +291,22 @@ class OWBeamPlot(OWWidget):
                 }
                 fig, _ = plot_rays(df, **rays_kwargs)
                 self._add_figure_tab("Rays", fig)
+            elif self.plot_type == 7:
+                divergence_rays_kwargs = {
+                    "aspect_ratio": bool(self.aspect_ratio),
+                    "x_range": common_kwargs["x_range"],
+                    "y_range": common_kwargs["y_range"],
+                    "plot": False,
+                }
+                fig, _ = plot_rays_divergence(df, **divergence_rays_kwargs)
+                self._add_figure_tab("Divergence Rays", fig)
             elif self.plot_type == 0:
                 fig, _ = plot_beam(df, **common_kwargs)
                 self._add_figure_tab("Beam", fig)
             elif self.plot_type == 1:
-                fig, _ = plot_divergence(df, **common_kwargs)
+                divergence_kwargs = dict(common_kwargs)
+                divergence_kwargs.pop("z_offset")
+                fig, _ = plot_divergence(df, **divergence_kwargs)
                 self._add_figure_tab("Divergence", fig)
             elif self.plot_type == 2:
                 direction = self._phase_direction()
@@ -320,11 +330,9 @@ class OWBeamPlot(OWWidget):
                 fig, _ = plot_energy_vs_intensity(df, **energy_intensity_kwargs)
                 self._add_figure_tab("Energy vs Intensity", fig)
 
-            self.Outputs.beam.send(self._beam)
             self.setStatusMessage("Plot updated.")
         except Exception as exception:
             self._beam = None
-            self.Outputs.beam.send(None)
             self.setStatusMessage(str(exception))
             MessageDialog.message(
                 parent=self,
@@ -337,7 +345,7 @@ class OWBeamPlot(OWWidget):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         canvas = FigureCanvas(figure)
-        toolbar = NavigationToolbar(canvas, tab)
+        toolbar = SnapshotNavigationToolbar(canvas, tab)
         layout.addWidget(toolbar)
         layout.addWidget(canvas)
         self.plot_tabs.addTab(tab, title)
@@ -360,7 +368,7 @@ class OWBeamPlot(OWWidget):
     def _update_visibility(self):
         is_phase_space = self.plot_type == 2
         is_1d = self.plot_type in (3, 4)
-        is_rays = self.plot_type == 6
+        is_rays = self.plot_type in (6, 7)
         is_2d = not is_1d
 
         self.phase_direction_box.setVisible(is_phase_space)

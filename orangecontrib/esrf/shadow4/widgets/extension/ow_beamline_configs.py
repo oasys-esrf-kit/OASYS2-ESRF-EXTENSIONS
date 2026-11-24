@@ -1,7 +1,6 @@
 from AnyQt.QtWidgets import QLineEdit, QWidget, QVBoxLayout
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from orangewidget import gui
 from orangewidget.settings import Setting
 from orangewidget.widget import MultiInput
@@ -14,6 +13,7 @@ from oasys2.widget.widget import OWWidget
 from barc4shadow.beamline import s4_beamline_to_layout
 from barc4shadow.viz import plot_beamline_configs
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
+from orangecontrib.esrf.util.matplotlib_tools import SnapshotNavigationToolbar
 
 
 class OWBeamlineConfigs(OWWidget):
@@ -32,6 +32,8 @@ class OWBeamlineConfigs(OWWidget):
     show_experiment = Setting(True)
     show_empty_elements = Setting(False)
     draw_to_scale = Setting(False)
+    horizontal_offset = Setting(0.0)
+    vertical_offset = Setting(0.0)
     config_labels = Setting([])
 
     def __init__(self):
@@ -63,6 +65,24 @@ class OWBeamlineConfigs(OWWidget):
         gui.checkBox(settings_box, self, "show_experiment", "Show experiment")
         gui.checkBox(settings_box, self, "show_empty_elements", "Show empty elements")
         gui.checkBox(settings_box, self, "draw_to_scale", "Draw to scale")
+        oasysgui.lineEdit(
+            settings_box,
+            self,
+            "horizontal_offset",
+            "Horizontal offset [m]",
+            labelWidth=250,
+            valueType=float,
+            orientation="horizontal",
+        )
+        oasysgui.lineEdit(
+            settings_box,
+            self,
+            "vertical_offset",
+            "Vertical offset [m]",
+            labelWidth=250,
+            valueType=float,
+            orientation="horizontal",
+        )
 
         self.labels_box = oasysgui.widgetBox(
             self.controlArea,
@@ -142,6 +162,8 @@ class OWBeamlineConfigs(OWWidget):
                 show_experiment=bool(self.show_experiment),
                 show_empty_elements=bool(self.show_empty_elements),
                 draw_to_scale=bool(self.draw_to_scale),
+                horizontal_offset=float(self.horizontal_offset),
+                vertical_offset=float(self.vertical_offset),
                 plot=False,
             )
             self._add_figure_tab("Beamline Configs", fig)
@@ -160,7 +182,7 @@ class OWBeamlineConfigs(OWWidget):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         canvas = FigureCanvas(figure)
-        toolbar = NavigationToolbar(canvas, tab)
+        toolbar = SnapshotNavigationToolbar(canvas, tab)
         layout.addWidget(toolbar)
         layout.addWidget(canvas)
         self.plot_tabs.addTab(tab, title)

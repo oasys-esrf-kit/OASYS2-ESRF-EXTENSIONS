@@ -2,10 +2,9 @@ from AnyQt.QtWidgets import QWidget, QVBoxLayout
 import copy
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from orangewidget import gui
 from orangewidget.settings import Setting
-from orangewidget.widget import Input, Output
+from orangewidget.widget import Input
 
 from oasys2.canvas.util.canvas_util import add_widget_parameters_to_module
 from oasys2.widget import gui as oasysgui
@@ -14,6 +13,7 @@ from oasys2.widget.widget import OWWidget
 
 from barc4beams import Beam
 from orangecontrib.shadow4.util.shadow4_objects import ShadowData
+from orangecontrib.esrf.util.matplotlib_tools import SnapshotNavigationToolbar
 
 
 COLOR_MAPS = ["viridis", "plasma", "turbo", "magma", "terrain"]
@@ -22,7 +22,7 @@ COLOR_MAPS = ["viridis", "plasma", "turbo", "magma", "terrain"]
 class OWBeamCaustic(OWWidget):
     name = "Beam Caustic"
     description = "Compute and plot a barc4beams caustic"
-    icon = "icons/uicons_signal-stream.png"
+    icon = "icons/signal.png"
     priority = 3
     keywords = ["barc", "barc4beams", "beam", "caustic", "plot"]
 
@@ -30,9 +30,6 @@ class OWBeamCaustic(OWWidget):
 
     class Inputs:
         shadow_data = Input("Shadow Data", ShadowData, default=True, auto_summary=False)
-
-    class Outputs:
-        beam = Output("BARC Beam", Beam, default=True, auto_summary=False)
 
     which = Setting(2)
     n_points = Setting(501)
@@ -227,11 +224,9 @@ class OWBeamCaustic(OWWidget):
                 fig, _ = result
                 self._add_figure_tab(f"Caustic {which.upper()}", fig)
 
-            self.Outputs.beam.send(self._beam)
             self.setStatusMessage("Caustic plot updated.")
         except Exception as exception:
             self._beam = None
-            self.Outputs.beam.send(None)
             self.setStatusMessage(str(exception))
             MessageDialog.message(
                 parent=self,
@@ -244,7 +239,7 @@ class OWBeamCaustic(OWWidget):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         canvas = FigureCanvas(figure)
-        toolbar = NavigationToolbar(canvas, tab)
+        toolbar = SnapshotNavigationToolbar(canvas, tab)
         layout.addWidget(toolbar)
         layout.addWidget(canvas)
         self.plot_tabs.addTab(tab, title)
